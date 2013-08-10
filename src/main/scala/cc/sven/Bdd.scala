@@ -11,7 +11,7 @@ sealed abstract trait BDD {
 
 trait BDDLike {
   def ite(t : CBDD, e : CBDD) : CBDD
-  def unary_!(b : CBDD) : CBDD
+  def unary_! : CBDD
   def &&(that: CBDD) = ite(that, False)
   def ||(that: CBDD) = ite(True, that)
   def implies(that: CBDD) = ite(that, True)
