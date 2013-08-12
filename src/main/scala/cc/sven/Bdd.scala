@@ -9,15 +9,20 @@ sealed abstract trait BDD {
   def toString(c: Boolean): String
 }
 
-trait BDDLike {
-  def ite(t : CBDD, e : CBDD) : CBDD
-  def unary_! : CBDD
-  def &&(that: CBDD) = ite(that, False)
-  def ||(that: CBDD) = ite(True, that)
-  def implies(that: CBDD) = ite(that, True)
+trait BDDLike[T] {
+  val BDDTrue: T
+  val BDDFalse: T
+  def ite(t: T, e: T): T
+  def unary_! : T
+  def partialEval(bs: List[Boolean]): T
+  def &&(that: T) = ite(that, BDDFalse)
+  def ||(that: T) = ite(BDDTrue, that)
+  def implies(that: T) = ite(that, BDDTrue)
 }
 
-class CBDD(val bdd: BDD, val compl: Boolean) extends BDDLike {
+class CBDD(val bdd: BDD, val compl: Boolean) extends BDDLike[CBDD] {
+  val BDDTrue = True
+  val BDDFalse = False
   def unary_! = new CBDD(bdd, !compl)
   private[this] def ite_raw(triple: (CBDD, CBDD, CBDD), f: ((CBDD, CBDD, CBDD)) => CBDD): CBDD =
     triple match {
@@ -39,12 +44,86 @@ class CBDD(val bdd: BDD, val compl: Boolean) extends BDDLike {
     }
   private[this] val memIte = Memoized.apply[(CBDD, CBDD, CBDD), CBDD](ite_raw(_, _))
   def ite(t: CBDD, e: CBDD): CBDD = memIte(this, t, e)
+  def partialEval(bs: List[Boolean]): CBDD = (bs, this) match {
+    case (_, False)                 => False
+    case (_, True)                  => True
+    case (true :: bs_, Node(t, _))  => t.partialEval(bs_)
+    case (false :: bs_, Node(_, f)) => f.partialEval(bs_)
+  }
   override def toString() = bdd.toString(compl)
   override def equals(that: Any) = that match {
     case t: CBDD => compl == t.compl && bdd == t.bdd
     case _       => false
   }
   override def hashCode = (bdd.hashCode, compl).hashCode
+}
+object CBDD {
+  def apply(bits: List[Boolean]): CBDD = {
+    require(bits match { case Nil => false; case _ => true })
+      def helper(hbits: List[Boolean]): CBDD = hbits match {
+        case true :: remBits  => Node(helper(remBits), False)
+        case false :: remBits => Node(False, helper(remBits))
+        case Nil              => True
+      }
+    helper(bits)
+  }
+}
+class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
+  private var wl: List[(CBDD, List[Boolean])] = List((cbdd, List.empty))
+  private var nextElem: Option[(List[Boolean], List[Boolean])] = None
+  
+  private def computeNext() {
+    wl match {
+      case Nil               => ()
+      case (False, _) :: wl_ => computeNext()
+      case (True, bs) :: wl_ => {
+        val remaining = layers - bs.length
+        nextElem = Some((bs, List.fill(remaining)(false)))
+      }
+      case (Node(set, uset), bs) :: wl_ => {
+        wl = (set, true :: bs) :: (uset, false :: bs) :: wl_
+        computeNext()
+      }
+    }
+  }
+
+  def hasNext(): Boolean = nextElem match {
+    case None => {
+      computeNext()
+      nextElem match {
+        case None    => false
+        case Some(_) => hasNext()
+      }
+    }
+    case Some(_) => true
+  }
+  
+  def next() : List[Boolean] = nextElem match {
+    case None => {
+      computeNext()
+      nextElem match {
+        case None => throw new NoSuchElementException("next on empty iterator")
+        case Some(_) => next()
+      }
+    }
+    case Some((offs, lo)) => {
+      val ret = (lo ++ offs).reverse
+      succList(lo) match {
+        case None => nextElem = None
+        case Some(lo_) => nextElem = Some((offs, lo_))
+      }
+      ret
+    }
+  }
+  
+  private def succList(bs: List[Boolean]): Option[List[Boolean]] = bs match {
+    case Nil          => None
+    case false :: bs1 => Some(true :: bs1)
+    case true :: bs1 => succList(bs1) match {
+      case None      => None
+      case Some(bs2) => Some(false :: bs2)
+    }
+  }
 }
 
 object Terminal extends BDD {
@@ -70,8 +149,8 @@ final class Node(val set: BDD, val uset: BDD, val compl: Boolean, val tag: Int) 
   }
 }
 object Node {
-  val cache = WeakHashMap.empty[BDD, BDD]
-  var tagCounter: Int = 1
+  private[this] val cache = WeakHashMap.empty[BDD, BDD]
+  private[this] var tagCounter: Int = 1
   def status(): String = "Items in cache: " ++ cache.size.toString
   def apply(set: CBDD, uset: CBDD) = {
     val ibit = set.compl
