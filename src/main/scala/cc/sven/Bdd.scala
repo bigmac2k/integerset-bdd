@@ -75,9 +75,13 @@ class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
   private def computeNext() {
     wl match {
       case Nil               => ()
-      case (False, _) :: wl_ => computeNext()
+      case (False, _) :: wl_ => {
+        wl = wl_
+        computeNext()
+      }
       case (True, bs) :: wl_ => {
         val remaining = layers - bs.length
+        wl = wl_
         nextElem = Some((bs, List.fill(remaining)(false)))
       }
       case (Node(set, uset), bs) :: wl_ => {

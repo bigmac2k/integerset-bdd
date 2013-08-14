@@ -48,13 +48,13 @@ object StridedIval {
   }
 }*/
 
-/*
-class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], boundedBits : BoundedBits[T]) extends BDDLike[IntSet[T]] with Set[T] {
+
+class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], boundedBits : BoundedBits[T]) /*extends BDDLike[IntSet[T]]*/ extends Set[T] {
   //enumeration
   //interval
   //strided ival
-  val BDDTrue = new IntSet[T](True)
-  val BDDFalse = new IntSet[T](False)
+  //val BDDTrue = new IntSet[T](True)
+  //val BDDFalse = new IntSet[T](False)
   def unary_! = new IntSet[T](!cbdd)
   def ite(t : IntSet[T], e : IntSet[T]) = new IntSet[T](cbdd.ite(t.cbdd, e.cbdd))
   def partialEval(bs : List[Boolean]) = new IntSet[T](cbdd.partialEval(bs))
@@ -64,9 +64,17 @@ class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], boundedBits : Bound
     case True => true
     case False => false
   }
+  def iterator() = new IntSetIterator(this)
+}
+
+class IntSetIterator[T](iset : IntSet[T])(implicit int : Integral[T], boundedBits : BoundedBits[T]) extends Iterator[T] {
+  val iter = new CBDDIterator(iset.cbdd, boundedBits.bits)
+  def hasNext() = iter.hasNext()
+  def next() = IntSet.fromBitVector(iter.next())
 }
 
 object IntSet {
+  //both conversions broken - check sign
   def toBitVector[T](i: T)(implicit int: Integral[T], boundedBits: BoundedBits[T]): List[Boolean] = {
     import int.{ mkNumericOps, mkOrderingOps }
       def helper(rest: T, bitvector: List[Boolean], c: Int): List[Boolean] = {
@@ -74,10 +82,18 @@ object IntSet {
       }
     helper(i, List.empty, boundedBits.bits)
   }
+  //both conversions broken - check sign
+  def fromBitVector[T](bs : List[Boolean])(implicit int : Integral[T], boundedBits : BoundedBits[T]) : T = {
+    import int.{ mkNumericOps, mkOrderingOps}
+    val bslen = bs.length
+    require(bslen <= boundedBits.bits)
+    val zipped = bs.zip(List.iterate(int.one, bslen)(_ * int.fromInt(2)).reverse)
+    (int.zero /: zipped)((acc : T, tuple : (Boolean, T)) => if(tuple._1) acc + tuple._2 else acc)
+  }
   def apply[T](i : T)(implicit int : Integral[T], boundedBits : BoundedBits[T]) : IntSet[T] = new IntSet (CBDD(toBitVector(i)(int, boundedBits)))
   def apply[T](s : Set[T])(implicit int : Integral[T], boundedBits : BoundedBits[T]) : IntSet[T] = new IntSet (((False : CBDD) /: s){
     (bdd, i) =>
       val ibdd = CBDD(toBitVector(i)(int, boundedBits))
       bdd || ibdd
   })
-}*/
+}
