@@ -9,20 +9,7 @@ sealed abstract trait BDD {
   def toString(c: Boolean): String
 }
 
-trait BDDLike[T] {
-  val BDDTrue: T
-  val BDDFalse: T
-  def ite(t: T, e: T): T
-  def unary_! : T
-  def partialEval(bs: List[Boolean]): T
-  def &&(that: T) = ite(that, BDDFalse)
-  def ||(that: T) = ite(BDDTrue, that)
-  def implies(that: T) = ite(that, BDDTrue)
-}
-
-class CBDD(val bdd: BDD, val compl: Boolean) extends BDDLike[CBDD] {
-  val BDDTrue = True
-  val BDDFalse = False
+class CBDD(val bdd: BDD, val compl: Boolean) {
   def unary_! = new CBDD(bdd, !compl)
   private[this] def ite_raw(triple: (CBDD, CBDD, CBDD), f: ((CBDD, CBDD, CBDD)) => CBDD): CBDD =
     triple match {
@@ -42,8 +29,14 @@ class CBDD(val bdd: BDD, val compl: Boolean) extends BDDLike[CBDD] {
         Node(f(iset, tset, eset), f(iuset, tuset, euset))
       }
     }
-  private[this] val memIte = Memoized.apply[(CBDD, CBDD, CBDD), CBDD](ite_raw(_, _))
+  //private[this] val memIte = Memoized.apply[(CBDD, CBDD, CBDD), CBDD](ite_raw(_, _))
+  private[this] var recIte : ((CBDD, CBDD, CBDD)) => CBDD = null
+  private[this] val memIte : ((CBDD, CBDD, CBDD)) => CBDD = ite_raw(_, recIte)
+  recIte = memIte
   def ite(t: CBDD, e: CBDD): CBDD = memIte(this, t, e)
+  def &&(that: CBDD) = ite(that, False)
+  def ||(that: CBDD) = ite(True, that)
+  def implies(that: CBDD) = ite(that, True)
   def partialEval(bs: List[Boolean]): CBDD = (bs, this) match {
     case (_, False)                 => False
     case (_, True)                  => True
