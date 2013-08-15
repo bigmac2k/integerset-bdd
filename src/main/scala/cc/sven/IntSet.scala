@@ -54,8 +54,10 @@ class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T
   //enumeration
   //interval
   //strided ival
-  //val BDDTrue = new IntSet[T](True)
-  //val BDDFalse = new IntSet[T](False)
+  /*todo:
+   * equals, canEqual
+   * diff (--)
+   */
   def unary_! = new IntSet[T](!cbdd)
   def ite(t : IntSet[T], e : IntSet[T]) = new IntSet[T](cbdd.ite(t.cbdd, e.cbdd))
   def partialEval(bs : List[Boolean]) = new IntSet[T](cbdd.partialEval(bs))
@@ -67,6 +69,24 @@ class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T
   }
   def iterator() = new IntSetIterator(this)
   override def empty = new IntSet(False)
+  def intersect(that : IntSet[T]) : IntSet[T] = new IntSet(cbdd && that.cbdd)
+  def &(that : IntSet[T]) : IntSet[T] = this intersect that
+  def union(that : IntSet[T]) : IntSet[T] = new IntSet(cbdd || that.cbdd)
+  def |(that : IntSet[T]) : IntSet[T] = this union that
+  //XXX check signed
+  def max = cbdd.trueMost match {
+    case None => throw new UnsupportedOperationException
+    case Some(bs) => IntSet.fromBitVector(bs)
+  }
+  //XXX check signed
+  def min = cbdd.falseMost match {
+    case None => throw new UnsupportedOperationException
+    case Some(bs) => IntSet.fromBitVector(bs)
+  }
+  def sizeBigInt : BigInt = {
+    import scala.math.BigInt._  
+    (cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length))).sum
+  }
 }
 
 class IntSetIterator[T](iset : IntSet[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) extends Iterator[T] {
@@ -108,4 +128,10 @@ object IntSet {
       val ibdd = CBDD(toBitVector(i)(int, boundedBits))
       bdd || ibdd
   })
+  //XXX check signed
+  def apply[T](ival : Ival[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = {
+    val smallereq = CBDD(toBitVector(ival.hi), False, True, True)
+    val greatereq = CBDD(toBitVector(ival.lo), True, False, True)
+    new IntSet(smallereq && greatereq)
+  }
 }

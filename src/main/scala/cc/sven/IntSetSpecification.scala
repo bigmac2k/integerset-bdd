@@ -3,6 +3,7 @@ package cc.sven.intset.test
 import org.scalacheck.Properties
 import org.scalacheck.Prop.forAll
 import cc.sven.intset._
+import cc.sven.bounded._
 
 
 object IntSetSpecification extends Properties("IntSet") {
@@ -32,5 +33,30 @@ object IntSetSpecification extends Properties("IntSet") {
       val b = IntSet(a)
       val c = IntSet(a)
       (b == c)
+  }
+  property("set size equal") = forAll{
+    (a : Set[Int]) =>
+      a.size == IntSet(a).sizeBigInt.intValue
+  }
+  property("invert twice") = forAll{
+    (a : Set[Int]) =>
+      (!(!IntSet(a))).seq == a
+  }
+  property("all ints") = forAll{
+    import scala.math.BigInt._
+    (a : Set[Int]) =>
+      val b = IntSet(a)
+      val boundedBits = BoundedBits.IntIsBoundedBit
+      (b.sizeBigInt + (!b).sizeBigInt) == 2.pow(boundedBits.bits)
+  }
+  property("min") = forAll{
+    (a : Set[Int], b : Int) =>
+      val c = a + b
+      IntSet(c).min == c.min
+  }
+  property("max") = forAll{
+    (a : Set[Int], b : Int) =>
+      val c = a + b
+      IntSet(c).max == c.max
   }
 }

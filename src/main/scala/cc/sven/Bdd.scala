@@ -43,6 +43,24 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case (true :: bs_, Node(t, _))  => t.partialEval(bs_)
     case (false :: bs_, Node(_, f)) => f.partialEval(bs_)
   }
+  def trueMost : Option[List[Boolean]] = this match {
+    case False => None
+    case True => Some(Nil)
+    case Node(False, uset) => uset.trueMost.map(false :: _)
+    case Node(set, _) => set.trueMost.map(true ::_)
+  }
+  def falseMost : Option[List[Boolean]] = this match {
+    case False => None
+    case True => Some(Nil)
+    case Node(set, False) => set.falseMost.map(true ::_)
+    case Node(_, uset) => uset.falseMost.map(false ::_)
+  }
+  private def computeTruePaths(path : List[Boolean]) : Stream[List[Boolean]] = this match {
+    case False => Stream()
+    case True => Stream(path)
+    case Node(set, uset) => set.computeTruePaths(true :: path) ++ uset.computeTruePaths(false :: path)
+  }
+  def truePaths = computeTruePaths(List()).map(_.reverse)
   override def toString() = bdd.toString(compl)
   override def equals(that: Any) = that match {
     case t: CBDD => compl == t.compl && bdd == t.bdd
@@ -59,6 +77,11 @@ object CBDD {
         case Nil              => True
       }
     helper(bits)
+  }
+  def apply(path : List[Boolean], set : CBDD, uset : CBDD, terminal : CBDD) : CBDD = path match {
+    case Nil => terminal
+    case true :: path_ => Node(CBDD(path_, set, uset, terminal), uset)
+    case false :: path_ => Node(set, CBDD(path_, set, uset, terminal))
   }
 }
 class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
