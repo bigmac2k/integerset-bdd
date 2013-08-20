@@ -11,7 +11,7 @@ object IntSetSpecification extends Properties("IntSet") {
   property("set eq IntSet[Int]") = forAll{
     (a : Set[Int]) =>
       val b = IntSet(a)
-      a.forall((i : Int) => b.contains(i)) && b.forall((i : Int) => a.contains(i))
+      a.forall(b.contains(_)) && b.forall(a.contains(_))
   }
   property("set cardinality") = forAll{
     (a : Set[Int]) =>
@@ -58,5 +58,16 @@ object IntSetSpecification extends Properties("IntSet") {
     (a : Set[Int], b : Int) =>
       val c = a + b
       IntSet(c).max == c.max
+  }
+  property("ival set") = forAll{
+    (a : Int, b : Int) =>
+      val a_ = a % 1000
+      val b_ = b % 1000
+      val lo = a_ min b_
+      val hi = a_ max b_
+      val ival = Ival(lo, hi)
+      val refSet = ival.toSet
+      val bddSet = IntSet(ival)
+      bddSet.forall(refSet.contains(_)) && refSet.forall(bddSet.contains(_))
   }
 }
