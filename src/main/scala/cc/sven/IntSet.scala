@@ -3,54 +3,52 @@ package cc.sven.intset
 import cc.sven.bdd._
 import cc.sven.bounded._
 import scala.collection.SetLike
+import scala.collection.IterableLike
 
-//Decided not to use case class to use inheritance (Ival <- StridedIval)
-class Ival[T](val lo: T, val hi: T)(implicit int: Integral[T]) extends Set[T] {
-  import int.{ mkNumericOps, mkOrderingOps }
-  require(lo <= hi)
-  override def toString = "[" + lo.toString + " .. " + hi.toString + "]"
-  def +(elem: T) = if (elem < lo) Ival(elem, hi) else if (elem > hi) Ival(lo, elem) else
-    this
-  def -(elem: T) = if (elem equiv lo) Ival(lo + int.one, hi) else if (elem equiv hi) Ival(lo, hi - int.one) else
-    this
-  def contains(elem: T) = elem >= lo && elem <= hi
-  def iterator() = new IvalIterator(this)
-}
-class IvalIterator[T](ival: Ival[T])(implicit int: Integral[T]) extends Iterator[T] {
-  import int.{ mkNumericOps, mkOrderingOps }
-  private var curr = ival.lo
-  def hasNext() = curr <= ival.hi
-  def next() = {
-    assert(hasNext())
-    val currNow = curr
-    curr = curr + int.one
-    currNow
-  }
-}
+//XXX Think about having the first bid (msb) have a flipped interpretation for signed values
+
+//XXX rework ivals such that they can be empty (add bottom element?)
+sealed abstract trait Ival[+T] extends Iterable[T] with IterableLike[T, Iterable[T]]
 object Ival {
-  def apply[T](lo: T, hi: T)(implicit int: Integral[T]): Ival[T] = new Ival(lo, hi)
-  def unapply[T](ival: Ival[T]) = Some(ival.lo, ival.hi)
+  def apply[T](lo : T, hi : T)(implicit int : Integral[T]) : Ival[T] = {
+    import int.{ mkNumericOps, mkOrderingOps}
+    if(lo > hi) EmptyIval else FilledIval(lo, hi)
+  }
 }
-/*class StridedIval[T](override val lo : T, override val hi : T, val stride : T)(implicit int : Integral[T]) extends Ival[T](lo, hi)(int) {
+case object EmptyIval extends Ival[Nothing] {
+  def iterator() = EmptyIterator
+  override def toString() = "[]"
+}
+object EmptyIterator extends Iterator[Nothing] {
+  def hasNext = false
+  def next() = throw new NoSuchElementException("next on empty iterator")
+}
+final case class FilledIval[T](val lo : T, val hi : T)(implicit int : Integral[T]) extends Ival[T] {
+  import int.{ mkNumericOps, mkOrderingOps}
+  require(lo <= hi)
+  def iterator = new IvalIterator(this)
+  override def toString() = "[" + lo.toString + " .. " + hi.toString + "]"
+}
+class IvalIterator[T](ival : Ival[T])(implicit int : Integral[T]) extends Iterator[T] {
   import int.{mkNumericOps, mkOrderingOps}
-  private[this] val next = lo + stride
-  require(lo < next && next <= hi)
-  override def toString = "[" + lo.toString + ", " + int.plus(lo, stride).toString + " .. " + hi.toString + "]"
+  private var currIval = ival
+  def hasNext() = currIval match {
+    case EmptyIval => false
+    case FilledIval(lo, hi) => true
+  }
+  def next() = currIval match {
+    case FilledIval(lo, hi) if(lo == hi) => {
+      currIval = EmptyIval
+      lo
+    }
+    case FilledIval(lo, hi) => {
+      currIval = FilledIval(lo + int.one, hi)
+      lo
+    }
+  }
 }
 
-//XXX implement Iterator, override + - contains iterator
-object StridedIval {
-  def apply[T](lo : T, next : T, hi : T)(implicit int : Integral[T]) : StridedIval[T] = {
-    import int.{mkNumericOps, mkOrderingOps}
-    val stride = next - lo
-    new StridedIval(lo,  hi, stride)
-  }
-  def unapply[T](ival : StridedIval[T]) = {
-  }
-}*/
-
-
-class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) /*extends BDDLike[IntSet[T]]*/ extends Set[T] with SetLike[T, IntSet[T]] {
+class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) extends Set[T] with SetLike[T, IntSet[T]] {
   //enumeration
   //interval
   //strided ival
@@ -73,15 +71,18 @@ class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T
   def &(that : IntSet[T]) : IntSet[T] = this intersect that
   def union(that : IntSet[T]) : IntSet[T] = new IntSet(cbdd || that.cbdd)
   def |(that : IntSet[T]) : IntSet[T] = this union that
-  //XXX check signed
-  def max = cbdd.trueMost match {
-    case None => throw new UnsupportedOperationException
-    case Some(bs) => IntSet.fromBitVector(bs)
+  def max = cbdd match {
+    case False => throw new UnsupportedOperationException
+    case True => IntSet.fromBitVector(List(false).padTo(boundedBits.bits - 1, true))
+    //set cannot be false because of canonical bdd, threfore set.trueMost != None
+    case Node(set, False) => IntSet.fromBitVector(true :: set.trueMost.get.padTo(boundedBits.bits - 1, true))
+    case Node(_, uset) => IntSet.fromBitVector(false :: uset.trueMost.get.padTo(boundedBits.bits - 1, true))
   }
-  //XXX check signed
-  def min = cbdd.falseMost match {
-    case None => throw new UnsupportedOperationException
-    case Some(bs) => IntSet.fromBitVector(bs)
+  def min = cbdd match {
+    case False => throw new UnsupportedOperationException
+    case True => IntSet.fromBitVector(List(true).padTo(boundedBits.bits - 1, false))
+    case Node(False, uset) => IntSet.fromBitVector(false :: uset.falseMost.get.padTo(boundedBits.bits - 1, false))
+    case Node(set, _) => IntSet.fromBitVector(true :: set.falseMost.get.padTo(boundedBits.bits - 1, false))
   }
   def sizeBigInt : BigInt = {
     import scala.math.BigInt._  
@@ -129,9 +130,23 @@ object IntSet {
       bdd || ibdd
   })
   //XXX check signed
-  def apply[T](ival : Ival[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = {
+  /*def apply[T](ival : Ival[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = {
     val smallereq = CBDD(toBitVector(ival.hi), False, True, True)
     val greatereq = CBDD(toBitVector(ival.lo), True, False, True)
     new IntSet(smallereq && greatereq)
+  }*/
+  def apply[T](ival : Ival[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = {
+    import int.{mkNumericOps, mkOrderingOps}
+    def smallerBV(fullLenBV : List[Boolean]) = CBDD(fullLenBV, False, True, True)
+    def greaterBV(fullLenBV : List[Boolean]) = CBDD(fullLenBV, True, False, True)
+    ival match {
+      case EmptyIval => IntSet(Set[T]())
+      case FilledIval(lo, hi) if(lo < int.zero) => {
+        val greaterSet = apply(Ival(int.zero, hi))
+        val smallerSet = new IntSet(greaterBV(toBitVector(lo)) && smallerBV(toBitVector(-int.one)))
+        greaterSet union smallerSet
+      }
+      case FilledIval(lo, hi) => new IntSet(smallerBV(toBitVector(hi)) && greaterBV(toBitVector(lo)))
+    }
   }
 }
