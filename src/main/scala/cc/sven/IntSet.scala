@@ -123,18 +123,15 @@ object IntSet {
     val positive = (int.zero /: zipped)((acc : T, tuple : (Boolean, T)) => if(tuple._1 != isNegative) acc + tuple._2 else acc)
     if(isNegative) -(positive + int.one) else positive
   }
-  def apply[T](i : T)(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = new IntSet (CBDD(toBitVector(i)(int, boundedBits)))
+  def apply[T](is : T*)(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = (IntSet(Set[T]()) /: is){
+    (acc, i) => acc | IntSet(Set(i))
+  }
+  //def apply[T](i : T)(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = new IntSet (CBDD(toBitVector(i)(int, boundedBits)))
   def apply[T](s : Set[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = new IntSet (((False : CBDD) /: s){
     (bdd, i) =>
       val ibdd = CBDD(toBitVector(i)(int, boundedBits))
       bdd || ibdd
   })
-  //XXX check signed
-  /*def apply[T](ival : Ival[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = {
-    val smallereq = CBDD(toBitVector(ival.hi), False, True, True)
-    val greatereq = CBDD(toBitVector(ival.lo), True, False, True)
-    new IntSet(smallereq && greatereq)
-  }*/
   def apply[T](ival : Ival[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = {
     import int.{mkNumericOps, mkOrderingOps}
     def smallerBV(fullLenBV : List[Boolean]) = CBDD(fullLenBV, False, True, True)

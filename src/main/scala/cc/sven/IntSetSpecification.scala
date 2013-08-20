@@ -70,4 +70,16 @@ object IntSetSpecification extends Properties("IntSet") {
       val bddSet = IntSet(ival)
       bddSet.forall(refSet.contains(_)) && refSet.forall(bddSet.contains(_))
   }
+  property("intersect") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val refSet = a & b
+      val bddSet = IntSet(a) & IntSet(b)
+      bddSet.forall(refSet.contains(_)) && refSet.forall(bddSet.contains(_))
+  }
+  property("union") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val refSet = a | b
+      val bddSet = IntSet(a) | IntSet(b)
+      bddSet.forall(refSet.contains(_)) && refSet.forall(bddSet.contains(_))
+  }
 }
