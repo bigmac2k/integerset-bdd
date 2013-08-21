@@ -1,6 +1,6 @@
 package cc.sven.bdd
 
-import cc.sven.memoize._
+import cc.sven.memoized._
 import scala.collection.mutable.WeakHashMap
 
 sealed abstract trait BDD {

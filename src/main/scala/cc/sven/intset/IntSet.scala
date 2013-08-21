@@ -4,6 +4,10 @@ import cc.sven.bdd._
 import cc.sven.bounded._
 import scala.collection.SetLike
 import scala.collection.IterableLike
+import cc.sven.bounded.BoundedBits
+import cc.sven.bounded.Bounded
+import cc.sven.intset.IntegerIntegral._
+import scala.math.BigInt.int2bigInt
 
 //XXX Think about having the first bid (msb) have a flipped interpretation for signed values
 
@@ -73,16 +77,16 @@ class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T
   def |(that : IntSet[T]) : IntSet[T] = this union that
   def max = cbdd match {
     case False => throw new UnsupportedOperationException
-    case True => IntSet.fromBitVector(List(false).padTo(boundedBits.bits - 1, true))
+    case True => IntSet.fromBitVector(List(false).padTo(boundedBits.bits - 1, true))(int, bounded, boundedBits)
     //set cannot be false because of canonical bdd, threfore set.trueMost != None
-    case Node(set, False) => IntSet.fromBitVector(true :: set.trueMost.get.padTo(boundedBits.bits - 1, true))
-    case Node(_, uset) => IntSet.fromBitVector(false :: uset.trueMost.get.padTo(boundedBits.bits - 1, true))
+    case Node(set, False) => IntSet.fromBitVector(true :: set.trueMost.get.padTo(boundedBits.bits - 1, true))(int, bounded, boundedBits)
+    case Node(_, uset) => IntSet.fromBitVector(false :: uset.trueMost.get.padTo(boundedBits.bits - 1, true))(int, bounded, boundedBits)
   }
   def min = cbdd match {
     case False => throw new UnsupportedOperationException
-    case True => IntSet.fromBitVector(List(true).padTo(boundedBits.bits - 1, false))
-    case Node(False, uset) => IntSet.fromBitVector(false :: uset.falseMost.get.padTo(boundedBits.bits - 1, false))
-    case Node(set, _) => IntSet.fromBitVector(true :: set.falseMost.get.padTo(boundedBits.bits - 1, false))
+    case True => IntSet.fromBitVector(List(true).padTo(boundedBits.bits - 1, false))(int, bounded, boundedBits)
+    case Node(False, uset) => IntSet.fromBitVector(false :: uset.falseMost.get.padTo(boundedBits.bits - 1, false))(int, bounded, boundedBits)
+    case Node(set, _) => IntSet.fromBitVector(true :: set.falseMost.get.padTo(boundedBits.bits - 1, false))(int, bounded, boundedBits)
   }
   def sizeBigInt : BigInt = {
     import scala.math.BigInt._  
@@ -93,7 +97,7 @@ class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T
 class IntSetIterator[T](iset : IntSet[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) extends Iterator[T] {
   val iter = new CBDDIterator(iset.cbdd, boundedBits.bits)
   def hasNext() = iter.hasNext()
-  def next() = IntSet.fromBitVector(iter.next())
+  def next() = IntSet.fromBitVector(iter.next())(int, bounded, boundedBits)
 }
 
 object IntSet {
@@ -140,10 +144,16 @@ object IntSet {
       case EmptyIval => IntSet(Set[T]())
       case FilledIval(lo, hi) if(lo < int.zero) => {
         val greaterSet = apply(Ival(int.zero, hi))
-        val smallerSet = new IntSet(greaterBV(toBitVector(lo)) && smallerBV(toBitVector(int.min(-int.one, hi))))
+        val smallerSet = new IntSet(greaterBV(toBitVector(lo)) && smallerBV(toBitVector(int.min(-int.one, hi))))(int, bounded, boundedBits)
         greaterSet union smallerSet
       }
       case FilledIval(lo, hi) => new IntSet(smallerBV(toBitVector(hi)) && greaterBV(toBitVector(lo)))
     }
+  }
+  def applyJava(i : Integer) : IntSet[Integer] = {
+    val int = implicitly[Integral[Integer]]
+    val bounded = implicitly[Bounded[Integer]]
+    val boundedBits = implicitly[BoundedBits[Integer]]
+    apply(i)(int, bounded, boundedBits)
   }
 }

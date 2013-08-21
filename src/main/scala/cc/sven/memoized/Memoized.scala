@@ -1,4 +1,4 @@
-package cc.sven.memoize
+package cc.sven.memoized
 
 import com.google.common.cache.CacheBuilder
 import collection.JavaConversions._
