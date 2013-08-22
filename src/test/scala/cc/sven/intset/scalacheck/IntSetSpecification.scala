@@ -34,6 +34,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val b = IntSet(a)
       val c = IntSet(a)
       (b == c)
+// some operations on the copied set to show independence of the sets?
   }
   property("set size equal") = forAll{
     (a : Set[Int]) =>
@@ -83,4 +84,59 @@ object IntSetSpecification extends Properties("IntSet") {
       val bddSet = IntSet(a) | IntSet(b)
       bddSet.forall(refSet.contains(_)) && refSet.forall(bddSet.contains(_))
   }
+// Wichtigere Funktionalitaeten:
+// teilmenge
+// isFull
+// isEmpty
+// iterator 
+// liste von elementen
+// bitextract: first:last bits ausschneiden
+// set mul set
+// set plus set
+// signextend
+// zerofill
+/* Zur info: Jakstab RTL operators:
+	UNKNOWN,
+	
+	// Operators for changing bitwidth
+	CAST, 
+	SIGN_EXTEND("sign_extend"),
+	ZERO_FILL("zero_fill"),
+	FSIZE,
+
+	// Comparison
+	EQUAL("=="), 
+	LESS("<"), // Signed
+	LESS_OR_EQUAL("<="), // Signed
+	UNSIGNED_LESS("u<"), 
+	UNSIGNED_LESS_OR_EQUAL("u<="),
+
+	// Unary operators
+	NOT("!"),
+	NEG("-"),
+	
+	// Associative commutative bitwise arithmetic operators
+	AND("&"), 
+	OR("|"), 
+	XOR("^"),
+	PLUS("+"),
+	MUL("*"),
+	FMUL,
+	FDIV,
+
+	// Other bitwise arithmetic operators
+	DIV, 
+	MOD, 
+	POWER_OF,
+
+	// Bitwise shift operations
+	SHR(">>>"), 
+	SAR(">>"), /* Shift right with sign extension * /
+	SHL("<<"), 
+	ROL, 
+	ROR, 
+	ROLC, 
+	RORC /* Rotate with carry * /
+	;
+*/
 }
