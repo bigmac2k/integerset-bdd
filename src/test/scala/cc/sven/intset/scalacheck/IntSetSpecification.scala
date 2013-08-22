@@ -34,7 +34,17 @@ object IntSetSpecification extends Properties("IntSet") {
       val b = IntSet(a)
       val c = IntSet(a)
       (b == c)
-// some operations on the copied set to show independence of the sets?
+//[- AW -] some operations on the copied set to show independence of the sets?
+  }
+  property("set cbdd.bdd ref equal") = forAll{
+    (a : Set[Int]) =>
+      val as = a.toList
+      val bs = util.Random.shuffle(as)
+      val cs = util.Random.shuffle(as)
+      //Build sets randomly - just to be sure
+      val b = (IntSet[Int]() /: bs)(_ + _)
+      val c = (IntSet[Int]() /: cs)(_ + _)
+      b.cbdd.bdd eq c.cbdd.bdd
   }
   property("set size equal") = forAll{
     (a : Set[Int]) =>
@@ -84,18 +94,19 @@ object IntSetSpecification extends Properties("IntSet") {
       val bddSet = IntSet(a) | IntSet(b)
       bddSet.forall(refSet.contains(_)) && refSet.forall(bddSet.contains(_))
   }
-// Wichtigere Funktionalitaeten:
-// teilmenge
-// isFull
-// isEmpty
-// iterator 
-// liste von elementen
-// bitextract: first:last bits ausschneiden
-// set mul set
-// set plus set
-// signextend
-// zerofill
-/* Zur info: Jakstab RTL operators:
+/* [- AW -]
+   Wichtigere Funktionalitaeten:
+   teilmenge
+   isFull
+   isEmpty
+   iterator 
+   liste von elementen
+   bitextract: first:last bits ausschneiden
+   set mul set
+   set plus set
+   signextend
+   zerofill
+   Zur info: Jakstab RTL operators:
 	UNKNOWN,
 	
 	// Operators for changing bitwidth
@@ -131,12 +142,12 @@ object IntSetSpecification extends Properties("IntSet") {
 
 	// Bitwise shift operations
 	SHR(">>>"), 
-	SAR(">>"), /* Shift right with sign extension * /
+	SAR(">>"), / * Shift right with sign extension * /
 	SHL("<<"), 
 	ROL, 
 	ROR, 
 	ROLC, 
-	RORC /* Rotate with carry * /
+	RORC / * Rotate with carry * /
 	;
 */
 }
