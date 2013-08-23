@@ -61,6 +61,14 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case Node(set, uset) => set.computeTruePaths(true :: path) ++ uset.computeTruePaths(false :: path)
   }
   def truePaths = computeTruePaths(List()).map(_.reverse)
+  def doesImply(that : CBDD) : Boolean = (this, that) match {
+    case (Node(set1, uset1), Node(set2, uset2)) => set1.doesImply(set2) && uset1.doesImply(uset2)
+    case (False, False) => true
+    case (True, True) => true
+    case (_, True) => true
+    case (False, _) => true
+    case _ => false
+  }
   override def toString() = bdd.toString(compl)
   override def equals(that: Any) = that match {
     case t: CBDD => compl == t.compl && bdd == t.bdd

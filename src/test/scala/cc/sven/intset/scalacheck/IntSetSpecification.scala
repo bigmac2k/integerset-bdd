@@ -5,6 +5,7 @@ import org.scalacheck.Prop.forAll
 import cc.sven.intset._
 import cc.sven.bounded._
 import cc.sven.intset.IntSet
+import scala.sys.BooleanProp
 
 
 object IntSetSpecification extends Properties("IntSet") {
@@ -94,13 +95,37 @@ object IntSetSpecification extends Properties("IntSet") {
       val bddSet = IntSet(a) | IntSet(b)
       bddSet.forall(refSet.contains(_)) && refSet.forall(bddSet.contains(_))
   }
+  property("subsetOf") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val a_ = IntSet(a)
+      val b_ = IntSet(b)
+      if(a subsetOf b) a_ subsetOf b_ else true
+  }
+  property("subsetOf intersection") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val c = a -- b
+      val a_ = IntSet(a)
+      val b_ = IntSet(b)
+      val c_ = IntSet(c)
+      c_ subsetOf a_
+  }
+  property("isEmpty") = forAll{
+    (a : Set[Int]) =>
+      IntSet(a).isEmpty == a.isEmpty
+  }
+  property("toList") = forAll{
+    (a : Set[Int]) =>
+      val ref = (IntSet[Int]() /: IntSet(a).toList)(_ + _)
+      ref.forall(a.contains(_)) && a.forall(ref.contains(_))
+  }
+  property("inverse is Full") = !IntSet[Int]() isFull
 /* [- AW -]
    Wichtigere Funktionalitaeten:
-   teilmenge
-   isFull
-   isEmpty
-   iterator 
-   liste von elementen
+   teilmenge [- SCM -] DONE
+   isFull [- SCM -] DONE
+   isEmpty [- SCM -] DONE
+   iterator [- SCM -] TEST: implicitly via ==?
+   liste von elementen [- SCM -] DONE
    bitextract: first:last bits ausschneiden
    set mul set
    set plus set

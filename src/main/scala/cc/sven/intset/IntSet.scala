@@ -4,6 +4,7 @@ import cc.sven.bdd._
 import cc.sven.bounded._
 import scala.collection.SetLike
 import scala.collection.IterableLike
+import scala.collection.JavaConverters._
 import cc.sven.bounded.BoundedBits
 import cc.sven.bounded.Bounded
 import cc.sven.intset.IntegerIntegral._
@@ -61,10 +62,13 @@ class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T
    * diff (--)
    */
   def unary_! = new IntSet[T](!cbdd)
+  def invert = !this
   def ite(t : IntSet[T], e : IntSet[T]) = new IntSet[T](cbdd.ite(t.cbdd, e.cbdd))
   def partialEval(bs : List[Boolean]) = new IntSet[T](cbdd.partialEval(bs))
   def +(elem : T) : IntSet[T] = new IntSet[T](cbdd || IntSet.apply[T](elem)(int, bounded, boundedBits).cbdd)
+  def add(elem : T) = this + elem
   def -(elem : T) : IntSet[T] = new IntSet[T](cbdd && !IntSet.apply[T](elem)(int, bounded, boundedBits).cbdd)
+  def remove(elem : T) = this - elem
   def contains(elem : T) : Boolean = partialEval(IntSet.toBitVector(elem)).cbdd match {
     case True => true
     case False => false
@@ -92,6 +96,10 @@ class IntSet[T](val cbdd : CBDD)(implicit int : Integral[T], bounded : Bounded[T
     import scala.math.BigInt._  
     (cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length))).sum
   }
+  def subsetOf(that : IntSet[T]) : Boolean = this.cbdd doesImply that.cbdd 
+  override def isEmpty : Boolean = this.cbdd match { case False => true; case _ => false }
+  override def nonEmpty : Boolean = !this.isEmpty //perhaps not needed - see implementation
+  def isFull : Boolean = this.cbdd match { case True => true; case _ => false }
 }
 
 class IntSetIterator[T](iset : IntSet[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) extends Iterator[T] {
@@ -130,12 +138,13 @@ object IntSet {
   def apply[T](is : T*)(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = (IntSet(Set[T]()) /: is){
     (acc, i) => acc | IntSet(Set(i))
   }
-  //def apply[T](i : T)(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = new IntSet (CBDD(toBitVector(i)(int, boundedBits)))
+  def apply[T](i : T)(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = new IntSet (CBDD(toBitVector(i)(int, boundedBits)))
   def apply[T](s : Set[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = new IntSet (((False : CBDD) /: s){
     (bdd, i) =>
       val ibdd = CBDD(toBitVector(i)(int, boundedBits))
       bdd || ibdd
   })
+  def apply[T](s : java.util.Set[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = apply(s.asScala.toSet)
   def apply[T](ival : Ival[T])(implicit int : Integral[T], bounded : Bounded[T], boundedBits : BoundedBits[T]) : IntSet[T] = {
     import int.{mkNumericOps, mkOrderingOps}
     def smallerBV(fullLenBV : List[Boolean]) = CBDD(fullLenBV, False, True, True)
@@ -150,10 +159,10 @@ object IntSet {
       case FilledIval(lo, hi) => new IntSet(smallerBV(toBitVector(hi)) && greaterBV(toBitVector(lo)))
     }
   }
-  def applyJava(i : Integer) : IntSet[Integer] = {
+  /*def apply(i : Integer) : IntSet[Integer] = {
     val int = implicitly[Integral[Integer]]
     val bounded = implicitly[Bounded[Integer]]
     val boundedBits = implicitly[BoundedBits[Integer]]
     apply(i)(int, bounded, boundedBits)
-  }
+  }*/
 }

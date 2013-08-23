@@ -1,11 +1,13 @@
 package cc.sven;
 
-import cc.sven.intset.IntSet;
+import cc.sven.intset.*;
 
 
 public class Main {
 	public static void main(String[] args) {
-		IntSet<Integer> foo = IntSet.applyJava(new Integer(1));
-		System.out.println(foo.contains(new Integer(1)));
+	Integer x = new Integer(3);
+	Integer y = new Integer(4);
+	Integer z = x + y;
+	System.out.println(z.toString());
 	}
 }
