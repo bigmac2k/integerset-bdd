@@ -6,8 +6,8 @@ import java.util.concurrent.TimeUnit
 
 class Memoized[-D <: AnyRef, +R <: AnyRef](cache: scala.collection.concurrent.Map[D, R], f: D => R) extends (D => R) {
   def this(f: D => R) = this(mapAsScalaConcurrentMap(
-      CacheBuilder.newBuilder()
-      .softValues() 
+    CacheBuilder.newBuilder()
+      .softValues()
       /*XXX check this, especially with combination of maximum size, what about weak keys? then, caching only works for arguments that exist?
        * what happens to the keys if soft value is collected? - are automatically evicted according to documentation
        * play around with configuration - what is most efficient?

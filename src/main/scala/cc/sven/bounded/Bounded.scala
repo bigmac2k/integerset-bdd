@@ -26,5 +26,5 @@ object BoundedBits {
 }
 
 trait BoundedBits[T] {
-  val bits : Int
+  val bits: Int
 }

@@ -2,6 +2,11 @@ package cc.sven.bdd
 
 import cc.sven.memoized._
 import scala.collection.mutable.WeakHashMap
+/*
+import scala.concurrent._
+import scala.concurrent.duration.Duration.Inf
+import scala.concurrent.ExecutionContext.Implicits.global
+*/
 
 sealed abstract trait BDD {
   val tag: Int
@@ -11,7 +16,7 @@ sealed abstract trait BDD {
 
 class CBDD(val bdd: BDD, val compl: Boolean) {
   def unary_! = new CBDD(bdd, !compl)
-  private[this] def ite_raw(triple: (CBDD, CBDD, CBDD), f: ((CBDD, CBDD, CBDD)) => CBDD): CBDD =
+  private[this] def ite_raw(/*depth : Int,*/ triple: (CBDD, CBDD, CBDD), f: (/*Int,*/ (CBDD, CBDD, CBDD)) => CBDD): CBDD =
     triple match {
       case (_, t, e) if t == e => t
       case (True, t, _)        => t
@@ -26,14 +31,23 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
           }
         val (tset, tuset) = extract(t)
         val (eset, euset) = extract(e)
-        Node(f(iset, tset, eset), f(iuset, tuset, euset))
+        //XXX remove
+        /*if(true) {*/
+          //println("nonpar " + depth.toString)
+          Node(f(/*depth + 1,*/ (iset, tset, eset)), f(/*depth + 1,*/ (iuset, tuset, euset)))
+        /*} else {
+          //println("par " + depth.toString)
+          val nset = future(f(depth + 1, (iset, tset, eset)))
+          val nuset = future(f(depth + 1, (iuset, tuset, euset)))
+          Node(Await.result(nset, Inf), Await.result(nuset, Inf))
+        }*/
       }
     }
   //private[this] val memIte = Memoized.apply[(CBDD, CBDD, CBDD), CBDD](ite_raw(_, _))
-  private[this] var recIte : ((CBDD, CBDD, CBDD)) => CBDD = null
-  private[this] val memIte : ((CBDD, CBDD, CBDD)) => CBDD = ite_raw(_, recIte)
+  private[this] var recIte: (/*Int,*/ (CBDD, CBDD, CBDD)) => CBDD = null
+  private[this] val memIte: (/*Int,*/ (CBDD, CBDD, CBDD)) => CBDD = ite_raw(_, recIte)//(a, b) => ite_raw(a, b, recIte)
   recIte = memIte
-  def ite(t: CBDD, e: CBDD): CBDD = memIte(this, t, e)
+  def ite(t: CBDD, e: CBDD): CBDD = memIte(/*0,*/ (this, t, e))
   def &&(that: CBDD) = ite(that, False)
   def ||(that: CBDD) = ite(True, that)
   def implies(that: CBDD) = ite(that, True)
@@ -43,31 +57,44 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case (true :: bs_, Node(t, _))  => t.partialEval(bs_)
     case (false :: bs_, Node(_, f)) => f.partialEval(bs_)
   }
-  def trueMost : Option[List[Boolean]] = this match {
-    case False => None
-    case True => Some(Nil)
+  def trueMost: Option[List[Boolean]] = this match {
+    case False             => None
+    case True              => Some(Nil)
     case Node(False, uset) => uset.trueMost.map(false :: _)
-    case Node(set, _) => set.trueMost.map(true ::_)
+    case Node(set, _)      => set.trueMost.map(true :: _)
   }
-  def falseMost : Option[List[Boolean]] = this match {
-    case False => None
-    case True => Some(Nil)
-    case Node(set, False) => set.falseMost.map(true ::_)
-    case Node(_, uset) => uset.falseMost.map(false ::_)
+  def falseMost: Option[List[Boolean]] = this match {
+    case False            => None
+    case True             => Some(Nil)
+    case Node(set, False) => set.falseMost.map(true :: _)
+    case Node(_, uset)    => uset.falseMost.map(false :: _)
   }
-  private def computeTruePaths(path : List[Boolean]) : Stream[List[Boolean]] = this match {
-    case False => Stream()
-    case True => Stream(path)
+  private def computeTruePaths(path: List[Boolean]): Stream[List[Boolean]] = this match {
+    case False           => Stream()
+    case True            => Stream(path)
     case Node(set, uset) => set.computeTruePaths(true :: path) ++ uset.computeTruePaths(false :: path)
   }
   def truePaths = computeTruePaths(List()).map(_.reverse)
-  def doesImply(that : CBDD) : Boolean = (this, that) match {
+  def randomTruePath() = {
+    def helper(bdd : CBDD, path : List[Boolean]) : List[Boolean] = bdd match {
+      case True => path
+      case False => throw new NoSuchElementException("randomTruePath on empty CBDD")
+      case Node(False, uset) => helper(uset, false :: path)
+      case Node(set, False) => helper(set, true :: path)
+      case Node(set, uset) => {
+        val dir = scala.util.Random.nextBoolean()
+        if(dir) helper(set, true :: path) else helper(uset, false :: path)
+      }
+    }
+    helper(this, Nil).reverse
+  }
+  def doesImply(that: CBDD): Boolean = (this, that) match {
     case (Node(set1, uset1), Node(set2, uset2)) => set1.doesImply(set2) && uset1.doesImply(uset2)
-    case (False, False) => true
-    case (True, True) => true
-    case (_, True) => true
-    case (False, _) => true
-    case _ => false
+    case (False, False)                         => true
+    case (True, True)                           => true
+    case (_, True)                              => true
+    case (False, _)                             => true
+    case _                                      => false
   }
   override def toString() = bdd.toString(compl)
   override def equals(that: Any) = that match {
@@ -86,19 +113,19 @@ object CBDD {
       }
     helper(bits)
   }
-  def apply(path : List[Boolean], set : CBDD, uset : CBDD, terminal : CBDD) : CBDD = path match {
-    case Nil => terminal
-    case true :: path_ => Node(CBDD(path_, set, uset, terminal), uset)
+  def apply(path: List[Boolean], set: CBDD, uset: CBDD, terminal: CBDD): CBDD = path match {
+    case Nil            => terminal
+    case true :: path_  => Node(CBDD(path_, set, uset, terminal), uset)
     case false :: path_ => Node(set, CBDD(path_, set, uset, terminal))
   }
 }
 class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
   private var wl: List[(CBDD, List[Boolean])] = List((cbdd, List.empty))
   private var nextElem: Option[(List[Boolean], List[Boolean])] = None
-  
+
   private def computeNext() {
     wl match {
-      case Nil               => ()
+      case Nil => ()
       case (False, _) :: wl_ => {
         wl = wl_
         computeNext()
@@ -125,25 +152,25 @@ class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
     }
     case Some(_) => true
   }
-  
-  def next() : List[Boolean] = nextElem match {
+
+  def next(): List[Boolean] = nextElem match {
     case None => {
       computeNext()
       nextElem match {
-        case None => throw new NoSuchElementException("next on empty iterator")
+        case None    => throw new NoSuchElementException("next on empty iterator")
         case Some(_) => next()
       }
     }
     case Some((offs, lo)) => {
       val ret = (lo ++ offs).reverse
       succList(lo) match {
-        case None => nextElem = None
+        case None      => nextElem = None
         case Some(lo_) => nextElem = Some((offs, lo_))
       }
       ret
     }
   }
-  
+
   private def succList(bs: List[Boolean]): Option[List[Boolean]] = bs match {
     case Nil          => None
     case false :: bs1 => Some(true :: bs1)
@@ -179,7 +206,7 @@ final class Node(val set: BDD, val uset: BDD, val compl: Boolean, val tag: Int) 
 object Node {
   private[this] val cache = WeakHashMap.empty[BDD, BDD]
   private[this] var tagCounter: Int = 1
-  def status(): String = "Items in cache: " ++ cache.size.toString
+  def status(): String = "Items in cache: " + cache.size.toString
   def apply(set: CBDD, uset: CBDD) = {
     val ibit = set.compl
     if (set.compl == uset.compl && set.bdd == Terminal && uset.bdd == Terminal) new CBDD(Terminal, ibit) else {

@@ -15,7 +15,7 @@ object IntegerIntegral {
     def toDouble(x: Integer): Double = x.intValue.toDouble
   }
   trait IntegerOrdering extends Ordering[Integer] {
-    def compare(x : Integer, y : Integer) : Int = x.intValue compare y.intValue
+    def compare(x: Integer, y: Integer): Int = x.intValue compare y.intValue
   }
   implicit object IntegerIsIntegral extends IntegerIsIntegral with IntegerOrdering
 }

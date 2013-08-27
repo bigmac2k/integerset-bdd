@@ -6,6 +6,7 @@ import cc.sven.intset._
 import cc.sven.bounded._
 import cc.sven.intset.IntSet
 import scala.sys.BooleanProp
+import cc.sven.misc.Misc._
 
 
 object IntSetSpecification extends Properties("IntSet") {
@@ -118,7 +119,24 @@ object IntSetSpecification extends Properties("IntSet") {
       val ref = (IntSet[Int]() /: IntSet(a).toList)(_ + _)
       ref.forall(a.contains(_)) && a.forall(ref.contains(_))
   }
-  property("inverse is Full") = !IntSet[Int]() isFull
+  property("inverse is Full") = (!IntSet[Int]()).isFull
+  property("plus singleton sets") = forAll{
+    (a : Int, b : Int) => IntSet(Set(a + b)) == (IntSet(a) plus IntSet(b))
+  }
+  property("plus sets") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val aa = IntSet(a)
+      val bb = IntSet(b)
+      val ref = cartesianProduct(aa, bb).map((x) => x._1 + x._2)
+      val res = aa plus bb
+      ref.forall(res.contains(_)) && res.forall(ref.contains(_))
+  }
+  property("random element is included") = forAll{
+    (a : Set[Int], b : Int) =>
+      val ab = IntSet(a + b)
+      val random = ab.randomElement()
+      ab.contains(random)
+  }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE
