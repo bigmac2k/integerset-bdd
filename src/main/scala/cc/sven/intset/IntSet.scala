@@ -13,7 +13,10 @@ import scala.math.BigInt.int2bigInt
 //XXX Think about having the first bid (msb) have a flipped interpretation for signed values
 
 //XXX rework ivals such that they can be empty (add bottom element?)
-sealed abstract trait Ival[+T] extends Iterable[T] with IterableLike[T, Iterable[T]]
+sealed abstract trait Ival[+T] extends Iterable[T] with IterableLike[T, Iterable[T]] {
+  def lo : T
+  def hi : T
+}
 object Ival {
   def apply[T](lo: T, hi: T)(implicit int: Integral[T]): Ival[T] = {
     import int.{ mkNumericOps, mkOrderingOps }
@@ -21,6 +24,8 @@ object Ival {
   }
 }
 case object EmptyIval extends Ival[Nothing] {
+  def lo = throw new IllegalArgumentException("lo on empty interval")
+  def hi = throw new IllegalArgumentException("hi on empty interval")
   def iterator() = EmptyIterator
   override def toString() = "[]"
 }
@@ -158,6 +163,44 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     val res = plus(this.cbdd, that.cbdd, boundedBits.bits)
     (new IntSet(res._1), new IntSet(res._2))
   }
+  //XXX this function is a stub
+  def mult(that : IntSet[T]) : IntSet[T] = {
+    import int.{mkNumericOps, mkOrderingOps}
+    val thisIval = Ival(this.min, this.max)
+    val thatIval = Ival(that.min, that.max)
+    null
+  }
+  private def bitwiseOpHelper(op : (Boolean, Boolean) => Boolean)(trueFalseTuples : List[((CBDD, Boolean), (CBDD, Boolean))]) : CBDD = {
+    val trueFalse = trueFalseTuples.distinct.partition((t) => op(t._1._2, t._2._2))
+    val nset = ((False : CBDD) /: trueFalse._1)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
+    val nuset = ((False : CBDD) /: trueFalse._2)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
+    Node(nset, nuset)
+  }
+  //XXX should probably be specialized
+  private def bitwiseOp(op : (Boolean, Boolean) => Boolean)(op1 : CBDD, op2 : CBDD) : CBDD = (op1, op2) match {
+    case (False, _) => False
+    case (x, False) => bitwiseOp(op)(False, x)
+    case (True, True) => True
+    case (Node(set, uset), True) => {
+      val trueFalseTuples = List(((set, true), (True, true)), ((set, true), (True, false)), ((uset, false), (True, true)), ((uset, false), (True, false)))
+      bitwiseOpHelper(op)(trueFalseTuples)
+    }
+    case (True, Node(set, uset)) => {//list this case explicitly to not force op to be commutative
+      val trueFalseTuples = List(((True, true), (set, true)), ((True, true), (uset, false)), ((True, false), (set, true)), ((True, false), (uset, false)))
+      bitwiseOpHelper(op)(trueFalseTuples)
+    }
+    case (Node(set1, uset1), Node(set2, uset2)) => {
+      val trueFalseTuples = List(((set1, true), (set2, true)), ((uset1, false), (set2, true)), ((set1, true), (uset2, false)), ((uset1, false), (uset2, false)))
+      /*val trueFalseTuples = for{
+        n1 <- List((set1, true), (uset1, false))
+        n2 <- List((set2, true), (uset2, false))
+      } yield (n1, n2)*/
+      bitwiseOpHelper(op)(trueFalseTuples)
+    }
+  }
+  def bAnd(that : IntSet[T]) : IntSet[T] = new IntSet(bitwiseOp(_ && _)(this.cbdd, that.cbdd))
+  def bOr(that : IntSet[T]) : IntSet[T] = new IntSet(bitwiseOp(_ || _)(this.cbdd, that.cbdd))
+  def bXOr(that : IntSet[T]) : IntSet[T] = new IntSet(bitwiseOp(_ != _)(this.cbdd, that.cbdd))
 }
 
 class IntSetIterator[T](iset: IntSet[T])(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]) extends Iterator[T] {

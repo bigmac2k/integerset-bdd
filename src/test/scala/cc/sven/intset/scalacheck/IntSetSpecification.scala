@@ -131,11 +131,53 @@ object IntSetSpecification extends Properties("IntSet") {
       val res = aa plus bb
       ref.forall(res.contains(_)) && res.forall(ref.contains(_))
   }
+  property("plus is commutative") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val aa = IntSet(a)
+      val bb = IntSet(b)
+      (aa plus bb) == (bb plus aa)
+  }
   property("random element is included") = forAll{
     (a : Set[Int], b : Int) =>
       val ab = IntSet(a + b)
       val random = ab.randomElement()
       ab.contains(random)
+  }
+  property("bitwise and 0") = forAll{
+    (a : Set[Int], b : Int) =>
+      val a_ = IntSet(a + b)
+      (a_ bAnd IntSet(0)) == IntSet(0) && (IntSet(0) bAnd a_) == IntSet(0)
+  }
+  property("bitwise and is commutative") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val aa = IntSet(a)
+      val bb = IntSet(b)
+      (aa bAnd bb) == (bb bAnd aa)
+  }
+  property("bitwise and") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val aa = IntSet(a)
+      val bb = IntSet(b)
+      val ref = cartesianProduct(a, b).map((x) => x._1 & x._2)
+      ref == (aa bAnd bb)
+  }
+  property("bitwise or ser") = forAll{
+    (a : Set[Int], b : Int) =>
+      val a_ = IntSet(a + b)
+      (a_ bOr IntSet(-1)) == IntSet(-1) && (IntSet(-1) bOr a_) == IntSet(-1)
+  }
+  property("bitwise or is commutative") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val aa = IntSet(a)
+      val bb = IntSet(b)
+      (aa bOr bb) == (bb bOr aa)
+  }
+  property("bitwise or") = forAll{
+    (a : Set[Int], b : Set[Int]) =>
+      val aa = IntSet(a)
+      val bb = IntSet(b)
+      val ref = cartesianProduct(a, b).map((x) => x._1 | x._2)
+      ref == (aa bOr bb)
   }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
