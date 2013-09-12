@@ -3,6 +3,7 @@ package cc.sven.bounded
 object Bounded {
   implicit val intIsBounded = new JIntIsBounded
   implicit val integerIsBounded = new JIntegerIsBounded
+  implicit val longIsBounded = new JLongIsBounded
 }
 
 trait Bounded[T] {
@@ -13,6 +14,7 @@ trait Bounded[T] {
 object BoundedBits {
   implicit val intIsBoundedBits = new JIntIsBoundedBits
   implicit val integerIsBoundedBits = new JIntegerIsBoundedBits
+  implicit val longIsBoundedBits = new JLongIsBoundedBits
 }
 
 trait BoundedBits[T] {

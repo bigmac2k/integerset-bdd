@@ -60,7 +60,7 @@ object IntSetSpecification extends Properties("IntSet") {
     import scala.math.BigInt._
     (a : Set[Int]) =>
       val b = IntSet(a)
-      val boundedBits = BoundedBits.IntIsBoundedBits
+      val boundedBits = BoundedBits.intIsBoundedBits
       (b.sizeBigInt + (!b).sizeBigInt) == 2.pow(boundedBits.bits)
   }
   property("min") = forAll{
@@ -178,6 +178,29 @@ object IntSetSpecification extends Properties("IntSet") {
       val bb = IntSet(b)
       val ref = cartesianProduct(a, b).map((x) => x._1 | x._2)
       ref == (aa bOr bb)
+  }
+  property("bitwise not") = forAll{
+    (a : Set[Int]) =>
+      val aa = IntSet(a)
+      val ref = a.map(~_)
+      ref == aa.bNot
+  }
+  property("bitwise not negate") = forAll{
+    (a : Set[Int]) =>
+      val aa = IntSet(a)
+      val ref = a.map(-_)
+      ref == aa.bNot.plus(IntSet(1))
+  }
+  property("bit Extract") = forAll{
+    (a : Set[Int], b : Int, c : Int) =>
+      val aa = IntSet(a)
+      val b_ = b.abs % 32
+      val c_ = c.abs % 32
+      val lo = b_ min c_
+      val hi = b_ max c_
+      val mask = (0 /: (lo to hi).toList)((acc, i) => acc | (1 << i))
+      val ref = a.map(_ & mask)
+      ref == aa.bitExtract(lo, hi)
   }
 /* [- AW -]
    Wichtigere Funktionalitaeten:

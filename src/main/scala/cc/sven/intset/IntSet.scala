@@ -14,8 +14,8 @@ import scala.math.BigInt.int2bigInt
 
 //XXX rework ivals such that they can be empty (add bottom element?)
 sealed abstract trait Ival[+T] extends Iterable[T] with IterableLike[T, Iterable[T]] {
-  def lo : T
-  def hi : T
+  def lo: T
+  def hi: T
 }
 object Ival {
   def apply[T](lo: T, hi: T)(implicit int: Integral[T]): Ival[T] = {
@@ -118,20 +118,20 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
    *   Communicating, because we could say: recurse up to $n$ times.
    *   this could be implemented as a widening operator
    */
+  private def union3(a: CBDD, b: CBDD, c: CBDD): CBDD = List(a, b, c).distinct.reduce(_ || _)
   private type CBDDTuple = (CBDD, CBDD)
-  private def addMerge(ff : CBDDTuple, ft : CBDDTuple, tf : CBDDTuple, tt : CBDDTuple) : CBDDTuple = {
-    def union3(a : CBDD, b : CBDD, c : CBDD) : CBDD = List(a, b, c).distinct.reduce(_ || _)
+  private def addMerge(ff: CBDDTuple, ft: CBDDTuple, tf: CBDDTuple, tt: CBDDTuple): CBDDTuple = {
     val trueOVNot = union3(tf._1, ft._1, ff._2)
     val falseOVNot = ff._1
     val trueOV = tt._2
     val falseOV = union3(tt._1, tf._2, ft._2)
     (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
   }
-  private def plus(op1 : CBDD, op2 : CBDD, depth : Int) : CBDDTuple = (op1, op2) match {
+  private def plus(op1: CBDD, op2: CBDD, depth: Int): CBDDTuple = (op1, op2) match {
     case (False, _) => (False, False)
     case (x, False) => plus(False, x, depth)
     case (True, True) => {
-      val ov = if(depth == 0) False else !CBDD(List.fill(depth)(true))
+      val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
       (True, ov)
     }
     case (Node(set, uset), True) => {
@@ -149,43 +149,43 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
        * set2 == uset2 -> tt = tf, ft = ff
        */
       val tt = plus(set1, set2, depth - 1)
-      val ft = if(set1 == uset1) tt else plus(uset1, set2, depth - 1)
-      val ff = if(set2 == uset2) ft else plus(uset1, uset2, depth - 1)
-      val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else plus(set1, uset2, depth - 1)
+      val ft = if (set1 == uset1) tt else plus(uset1, set2, depth - 1)
+      val ff = if (set2 == uset2) ft else plus(uset1, uset2, depth - 1)
+      val tf = if (set1 == uset1) ff else if (set2 == uset2) tt else plus(set1, uset2, depth - 1)
       addMerge(ff, ft, tf, tt)
     }
   }
-  def plus(that : IntSet[T]) : IntSet[T] = {
+  def plus(that: IntSet[T]): IntSet[T] = {
     val res = plus(this.cbdd, that.cbdd, boundedBits.bits)
     new IntSet(res._1 || res._2)
   }
-  def plusWithCarry(that : IntSet[T]) : (IntSet[T], IntSet[T]) = {
+  def plusWithCarry(that: IntSet[T]): (IntSet[T], IntSet[T]) = {
     val res = plus(this.cbdd, that.cbdd, boundedBits.bits)
     (new IntSet(res._1), new IntSet(res._2))
   }
   //XXX this function is a stub
-  def mult(that : IntSet[T]) : IntSet[T] = {
-    import int.{mkNumericOps, mkOrderingOps}
+  def mult(that: IntSet[T]): IntSet[T] = {
+    import int.{ mkNumericOps, mkOrderingOps }
     val thisIval = Ival(this.min, this.max)
     val thatIval = Ival(that.min, that.max)
     null
   }
-  private def bitwiseOpHelper(op : (Boolean, Boolean) => Boolean)(trueFalseTuples : List[((CBDD, Boolean), (CBDD, Boolean))]) : CBDD = {
+  private def bitwiseOpHelper(op: (Boolean, Boolean) => Boolean)(trueFalseTuples: List[((CBDD, Boolean), (CBDD, Boolean))]): CBDD = {
     val trueFalse = trueFalseTuples.distinct.partition((t) => op(t._1._2, t._2._2))
-    val nset = ((False : CBDD) /: trueFalse._1)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
-    val nuset = ((False : CBDD) /: trueFalse._2)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
+    val nset = ((False: CBDD) /: trueFalse._1)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
+    val nuset = ((False: CBDD) /: trueFalse._2)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
     Node(nset, nuset)
   }
   //XXX should probably be specialized
-  private def bitwiseOp(op : (Boolean, Boolean) => Boolean)(op1 : CBDD, op2 : CBDD) : CBDD = (op1, op2) match {
-    case (False, _) => False
-    case (x, False) => bitwiseOp(op)(False, x)
+  private def bitwiseOp(op: (Boolean, Boolean) => Boolean)(op1: CBDD, op2: CBDD): CBDD = (op1, op2) match {
+    case (False, _)   => False
+    case (x, False)   => bitwiseOp(op)(False, x)
     case (True, True) => True
     case (Node(set, uset), True) => {
       val trueFalseTuples = List(((set, true), (True, true)), ((set, true), (True, false)), ((uset, false), (True, true)), ((uset, false), (True, false)))
       bitwiseOpHelper(op)(trueFalseTuples)
     }
-    case (True, Node(set, uset)) => {//list this case explicitly to not force op to be commutative
+    case (True, Node(set, uset)) => { //list this case explicitly to not force op to be commutative
       val trueFalseTuples = List(((True, true), (set, true)), ((True, true), (uset, false)), ((True, false), (set, true)), ((True, false), (uset, false)))
       bitwiseOpHelper(op)(trueFalseTuples)
     }
@@ -198,9 +198,49 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
       bitwiseOpHelper(op)(trueFalseTuples)
     }
   }
-  def bAnd(that : IntSet[T]) : IntSet[T] = new IntSet(bitwiseOp(_ && _)(this.cbdd, that.cbdd))
-  def bOr(that : IntSet[T]) : IntSet[T] = new IntSet(bitwiseOp(_ || _)(this.cbdd, that.cbdd))
-  def bXOr(that : IntSet[T]) : IntSet[T] = new IntSet(bitwiseOp(_ != _)(this.cbdd, that.cbdd))
+  def bAndRef(that: IntSet[T]): IntSet[T] = new IntSet(bitwiseOp(_ && _)(cbdd, that.cbdd))
+  def bOr(that: IntSet[T]): IntSet[T] = new IntSet(bitwiseOp(_ || _)(cbdd, that.cbdd))
+  def bXOr(that: IntSet[T]): IntSet[T] = new IntSet(bitwiseOp(_ != _)(cbdd, that.cbdd))
+  def bAnd(op1: CBDD, op2: CBDD): CBDD = (op1, op2) match {
+    case (False, _) => False
+    case (_, False) => bAnd(op2, op1)
+    case (True, x) => {
+        def trueRecurse(bdd: CBDD): CBDD = bdd match {
+          case False => False
+          case True  => True
+          case Node(set, uset) => {
+            val nset = trueRecurse(set)
+            val nuset = trueRecurse(uset) || nset
+            Node(nset, nuset)
+          }
+        }
+      trueRecurse(x)
+    }
+    case (_, True) => bAnd(op2, op1)
+    case (Node(set1, uset1), Node(set2, uset2)) => {
+      val tt = bAnd(set1, set2)
+      val ft = if(set1 == uset1) tt else bAnd(uset1, set2)
+      val ff = if(set2 == uset2) ft else bAnd(uset1, uset2)
+      val tf = if(set1 == uset1) ff else if (set2 == uset2) tt else bAnd(set1, uset2)
+      val nuset = union3(tf, ft, ff)
+      Node(tt, nuset)
+    }  
+  }
+  def bAnd(that : IntSet[T]) : IntSet[T] = new IntSet(bAnd(cbdd, that.cbdd))
+  private def bitwiseNotHelper(op1: CBDD): CBDD = op1 match {
+    case False           => False
+    case True            => True
+    case Node(set, uset) => Node(bitwiseNotHelper(uset), bitwiseNotHelper(set))
+  }
+  def bNot: IntSet[T] = new IntSet(bitwiseNotHelper(cbdd))
+  def bitExtract(from: Int, to: Int): IntSet[T] = {
+    require(from <= to && from < boundedBits.bits && to < boundedBits.bits && from >= 0 && to >= 0)
+    val bvMask = List.fill(boundedBits.bits - to - 1)(false) ++ List.fill(to + 1 - from)(true) ++ List.fill(from)(false)
+    assert(bvMask.length == boundedBits.bits)
+    val mask = IntSet.fromBitVector(bvMask)(int, bounded, boundedBits)
+    this bAnd IntSet(mask)
+  }
+  def java = this.asJava
 }
 
 class IntSetIterator[T](iset: IntSet[T])(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]) extends Iterator[T] {
@@ -241,7 +281,7 @@ object IntSet {
    * but we want at least apply(1) and apply() for java
    */
   def apply[T]()(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = IntSet(Set[T]())
-  def apply[T](i1 : T, i2 : T, is: T*)(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = (IntSet(Set[T]()) /: (i1 :: i2 :: is.toList)) {
+  def apply[T](i1: T, i2: T, is: T*)(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = (IntSet(Set[T]()) /: (i1 :: i2 :: is.toList)) {
     (acc, i) => acc | IntSet(Set(i))
   }
   def apply[T](i: T)(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = new IntSet(CBDD(toBitVector(i)(int, boundedBits)))
@@ -265,6 +305,7 @@ object IntSet {
       case FilledIval(lo, hi) => new IntSet(smallerBV(toBitVector(hi)) && greaterBV(toBitVector(lo)))
     }
   }
+  def apply[T <: FiniteOrderedIntegral[T]](ele: T): IntSet[T] = IntSet(Set[T](ele))(ele, ele, ele)
   /*def apply(i : Integer) : IntSet[Integer] = {
     val int = implicitly[Integral[Integer]]
     val bounded = implicitly[Bounded[Integer]]
