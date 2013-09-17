@@ -1,6 +1,6 @@
-package cc.sven.intset
+package cc.sven.integral
 
-trait IntegerIsIntegral extends Integral[Integer] {
+class JIntegerIsIntegral extends JIntegerOrdering with Integral[Integer] {
   def plus(x: Integer, y: Integer): Integer = x.intValue + y
   def minus(x: Integer, y: Integer): Integer = x.intValue - y
   def times(x: Integer, y: Integer): Integer = x.intValue * y
@@ -12,11 +12,4 @@ trait IntegerIsIntegral extends Integral[Integer] {
   def toLong(x: Integer): Long = x.intValue
   def toFloat(x: Integer): Float = x.intValue.toFloat
   def toDouble(x: Integer): Double = x.intValue.toDouble
-}
-trait IntegerOrdering extends Ordering[Integer] {
-  def compare(x: Integer, y: Integer): Int = x.intValue compare y.intValue
-}
-
-object IntegerIntegral {
-  implicit val integerIsIntegral = new JIntegerIsIntegral
 }

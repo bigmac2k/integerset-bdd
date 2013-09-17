@@ -10,13 +10,3 @@ trait Bounded[T] {
   val maxBound: T
   val minBound: T
 }
-
-object BoundedBits {
-  implicit val intIsBoundedBits = new JIntIsBoundedBits
-  implicit val integerIsBoundedBits = new JIntegerIsBoundedBits
-  implicit val longIsBoundedBits = new JLongIsBoundedBits
-}
-
-trait BoundedBits[T] {
-  val bits: Int
-}

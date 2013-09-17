@@ -1,17 +1,20 @@
 package cc.sven;
 
 
-import cc.sven.intset.*;
+import scala.Tuple2;
+import cc.sven.integral.*;
 import cc.sven.bounded.*;
+import cc.sven.tlike.*;
 
 public class Main {
 	public static void main(String[] args) {
-		IntSet<Integer> intset = IntSet$.MODULE$.apply(new JIntegerIsIntegral(), new JIntegerIsBounded(), new JIntegerIsBoundedBits());
-		intset = intset.unary_$bang();
-		intset = intset.bitExtract(0, 2);
-		System.out.println("gogogo");
-		for(Integer i : intset.java()) {
-			System.out.println(i.toString());
-		}
+		/*Castable<Tuple2<Integer, Integer>, Tuple2<Integer, Integer>> iCaster = new IdCaster<Tuple2<Integer, Integer>>();
+		IntLikeSet<Integer, Integer> set = IntLikeSet$.MODULE$.apply(32, new JIntegerIsIntegral(), new JIntegerIsBounded(), new JIntegerIsBoundedBits(), DynBoundedBits$.MODULE$.boundedBitsToDynBoundedBits(new JIntegerIsBoundedBits()), iCaster, iCaster);
+		set = set.$plus(4);
+		set = set.$plus(88);
+		for(Integer i : set.java()) {
+			System.out.println(i);
+		}*/
+		System.out.println("hallo");
 	}
 }

@@ -7,7 +7,7 @@ import scala.collection.IterableLike
 import scala.collection.JavaConverters._
 import cc.sven.bounded.BoundedBits
 import cc.sven.bounded.Bounded
-import cc.sven.intset.IntegerIntegral._
+import cc.sven.integral.Implicits._
 import scala.math.BigInt.int2bigInt
 
 //XXX Think about having the first bid (msb) have a flipped interpretation for signed values
@@ -233,13 +233,14 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     case Node(set, uset) => Node(bitwiseNotHelper(uset), bitwiseNotHelper(set))
   }
   def bNot: IntSet[T] = new IntSet(bitwiseNotHelper(cbdd))
-  def bitExtract(from: Int, to: Int): IntSet[T] = {
+  //XXX rework to trivial version - require n bit int - how to do this?
+  /*def bitExtract(from: Int, to: Int): IntSet[T] = {
     require(from <= to && from < boundedBits.bits && to < boundedBits.bits && from >= 0 && to >= 0)
     val bvMask = List.fill(boundedBits.bits - to - 1)(false) ++ List.fill(to + 1 - from)(true) ++ List.fill(from)(false)
     assert(bvMask.length == boundedBits.bits)
     val mask = IntSet.fromBitVector(bvMask)(int, bounded, boundedBits)
     this bAnd IntSet(mask)
-  }
+  }*/
   def java = this.asJava
 }
 

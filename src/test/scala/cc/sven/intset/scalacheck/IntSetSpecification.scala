@@ -191,7 +191,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val ref = a.map(-_)
       ref == aa.bNot.plus(IntSet(1))
   }
-  property("bit Extract") = forAll{
+/*  property("bit Extract") = forAll{
     (a : Set[Int], b : Int, c : Int) =>
       val aa = IntSet(a)
       val b_ = b.abs % 32
@@ -201,7 +201,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val mask = (0 /: (lo to hi).toList)((acc, i) => acc | (1 << i))
       val ref = a.map(_ & mask)
       ref == aa.bitExtract(lo, hi)
-  }
+  }*/
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE
