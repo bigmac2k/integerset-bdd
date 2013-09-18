@@ -7,6 +7,7 @@ import cc.sven.bounded._
 import cc.sven.intset.IntSet
 import scala.sys.BooleanProp
 import cc.sven.misc.Misc._
+import cc.sven.tlike._
 
 
 object IntSetSpecification extends Properties("IntSet") {
@@ -191,17 +192,19 @@ object IntSetSpecification extends Properties("IntSet") {
       val ref = a.map(-_)
       ref == aa.bNot.plus(IntSet(1))
   }
-/*  property("bit Extract") = forAll{
-    (a : Set[Int], b : Int, c : Int) =>
-      val aa = IntSet(a)
+  property("bit Extract") = forAll{
+    (a_ : Set[Int], b : Int, c : Int) =>
+      val a = a_.map(_.abs)
+      val aa = IntLikeSet[Int, Int](a)
       val b_ = b.abs % 32
       val c_ = c.abs % 32
       val lo = b_ min c_
       val hi = b_ max c_
       val mask = (0 /: (lo to hi).toList)((acc, i) => acc | (1 << i))
-      val ref = a.map(_ & mask)
-      ref == aa.bitExtract(lo, hi)
-  }*/
+      val ref = a.map((i) => ((i  & mask) >>> lo))
+      val us = new IntLikeSet[Int, Int](32, aa.bitExtract(hi, lo).set)
+      us == ref
+  }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE

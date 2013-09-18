@@ -1,6 +1,7 @@
 package cc.sven.tlike
 
 import scala.collection.SetLike
+import cc.sven.bdd._
 import cc.sven.intset._
 import cc.sven.bounded._
 import scala.collection.JavaConverters._
@@ -34,9 +35,22 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   }
   def iterator() = new IntLikeSetIterator(this)
   def java = this.asJava
+  def bitExtract(from : Int, to : Int) : IntLikeSet[I, T] = {
+    require(from >= to && to >= 0)
+    val toDrop = bits - from - 1
+    val toTake = from - to + 1
+    val toFill = bits - toTake
+    def takeFkt(cbdd : CBDD) : CBDD = cbdd.take(toTake)
+    def reduceFkt(a : CBDD, b : CBDD) = a || b
+    val nCBDD = CBDD(List.fill(toFill)(false), False, False, set.cbdd.drop(toDrop, False, takeFkt, reduceFkt))
+    val iSet = new IntSet[I](nCBDD)
+    new IntLikeSet[I, T](toTake, iSet)
+  }
 }
 object IntLikeSet {
-  def apply[I, T](bits : Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) = new IntLikeSet(bits, IntSet[I]()(int, bounded, boundedBits))
+  def apply[I, T](bits : Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I]()(int, bounded, boundedBits))
+  def apply[I, T](bits : Int, set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I](set.map(castTI(_)._2))(int, bounded, boundedBits))
+  def apply[I, T](set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], tboundedBits : BoundedBits[T], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = apply(tboundedBits.bits, set)
 }
 
 object Implicits {

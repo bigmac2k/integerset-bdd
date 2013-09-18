@@ -16,7 +16,7 @@ sealed abstract trait BDD {
 
 class CBDD(val bdd: BDD, val compl: Boolean) {
   def unary_! = new CBDD(bdd, !compl)
-  private[this] def ite_raw(/*depth : Int,*/ triple: (CBDD, CBDD, CBDD), f: (/*Int,*/ (CBDD, CBDD, CBDD)) => CBDD): CBDD =
+  private[this] def ite_raw( /*depth : Int,*/ triple: (CBDD, CBDD, CBDD), f: ( /*Int,*/ (CBDD, CBDD, CBDD)) => CBDD): CBDD =
     triple match {
       case (_, t, e) if t == e => t
       case (True, t, _)        => t
@@ -33,8 +33,8 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
         val (eset, euset) = extract(e)
         //XXX remove
         /*if(true) {*/
-          //println("nonpar " + depth.toString)
-          Node(f(/*depth + 1,*/ (iset, tset, eset)), f(/*depth + 1,*/ (iuset, tuset, euset)))
+        //println("nonpar " + depth.toString)
+        Node(f( /*depth + 1,*/ (iset, tset, eset)), f( /*depth + 1,*/ (iuset, tuset, euset)))
         /*} else {
           //println("par " + depth.toString)
           val nset = future(f(depth + 1, (iset, tset, eset)))
@@ -44,10 +44,10 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
       }
     }
   //private[this] val memIte = Memoized.apply[(CBDD, CBDD, CBDD), CBDD](ite_raw(_, _))
-  private[this] var recIte: (/*Int,*/ (CBDD, CBDD, CBDD)) => CBDD = null
-  private[this] val memIte: (/*Int,*/ (CBDD, CBDD, CBDD)) => CBDD = ite_raw(_, recIte)//(a, b) => ite_raw(a, b, recIte)
+  private[this] var recIte: ( /*Int,*/ (CBDD, CBDD, CBDD)) => CBDD = null
+  private[this] val memIte: ( /*Int,*/ (CBDD, CBDD, CBDD)) => CBDD = ite_raw(_, recIte) //(a, b) => ite_raw(a, b, recIte)
   recIte = memIte
-  def ite(t: CBDD, e: CBDD): CBDD = memIte(/*0,*/ (this, t, e))
+  def ite(t: CBDD, e: CBDD): CBDD = memIte( /*0,*/ (this, t, e))
   def &&(that: CBDD) = ite(that, False)
   def ||(that: CBDD) = ite(True, that)
   def implies(that: CBDD) = ite(that, True)
@@ -76,16 +76,16 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   }
   def truePaths = computeTruePaths(List()).map(_.reverse)
   def randomTruePath() = {
-    def helper(bdd : CBDD, path : List[Boolean]) : List[Boolean] = bdd match {
-      case True => path
-      case False => throw new NoSuchElementException("randomTruePath on empty CBDD")
-      case Node(False, uset) => helper(uset, false :: path)
-      case Node(set, False) => helper(set, true :: path)
-      case Node(set, uset) => {
-        val dir = scala.util.Random.nextBoolean()
-        if(dir) helper(set, true :: path) else helper(uset, false :: path)
+      def helper(bdd: CBDD, path: List[Boolean]): List[Boolean] = bdd match {
+        case True              => path
+        case False             => throw new NoSuchElementException("randomTruePath on empty CBDD")
+        case Node(False, uset) => helper(uset, false :: path)
+        case Node(set, False)  => helper(set, true :: path)
+        case Node(set, uset) => {
+          val dir = scala.util.Random.nextBoolean()
+          if (dir) helper(set, true :: path) else helper(uset, false :: path)
+        }
       }
-    }
     helper(this, Nil).reverse
   }
   def doesImply(that: CBDD): Boolean = (this, that) match {
@@ -96,6 +96,23 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case (False, _)                             => true
     case _                                      => false
   }
+  def take(toTake: Int): CBDD = this match {
+    case False            => False
+    case _ if toTake <= 0 => True
+    case Node(set, uset)  => Node(set.take(toTake - 1), uset.take(toTake - 1))
+    case True             => True
+  }
+  def drop[A](toDrop: Int, acc : A, mapF : CBDD => A, reduceF : (A, A) => A): A = this match {
+    case False            => mapF(False)
+    case _ if toDrop <= 0 => mapF(this)
+    case Node(set, uset) => {
+      val setDropped = set.drop(toDrop - 1, acc, mapF, reduceF)
+      val usetDropped = uset.drop(toDrop - 1, acc, mapF, reduceF)
+      reduceF(setDropped, usetDropped)
+    }
+    case True => mapF(True)
+  }
+  def dropOr(toDrop : Int) = this.drop(toDrop, False, (x : CBDD) => x, (a : CBDD, b : CBDD) => a || b)
   override def toString() = bdd.toString(compl)
   override def equals(that: Any) = that match {
     case t: CBDD => compl == t.compl && bdd == t.bdd
