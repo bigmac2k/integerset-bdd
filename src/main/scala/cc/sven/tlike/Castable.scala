@@ -13,6 +13,7 @@ object Castable {
   implicit def boundedBitsToCastableBW[T](implicit boundedBits : BoundedBits[T]) = new Castable[T, (Int, T)] {
     def apply(t : T) : (Int, T) = (boundedBits.bits, t)
   }
+  //XXX change this such that it works for signed - then iterator would work again
   implicit def BWCastable[T] = new Castable[(Int, T), T] {
     def apply(p : (Int, T)) : T = p._2
   }

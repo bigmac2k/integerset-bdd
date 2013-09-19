@@ -5,6 +5,8 @@ import cc.sven.bdd._
 import cc.sven.intset._
 import cc.sven.bounded._
 import scala.collection.JavaConverters._
+import java.lang.AssertionError
+import java.lang.AssertionError
 
 class BitWidthException(widthA : Int, widthB : Int) extends Exception {
   override def toString = widthA.toString + " does not match required " + widthB.toString
@@ -64,36 +66,53 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   override def nonEmpty = set.nonEmpty
   private def getBWCBDD = set.cbdd.partialEval(List.fill(boundedBits.bits - bits)(false))
   private def fromBWCBDD(bdd : CBDD) = new IntLikeSet[I, T](bits, new IntSet[I](CBDD(List.fill(boundedBits.bits - bits)(false), False, False, bdd)))
-  //TODO (reimplement for bit width)
   def isFull = getBWCBDD match {
     case Some(True) => true
     case _ => false
   }
-  /*def plus(that : IntLikeSet[I, T]) = {
-    checkBitWidth(this, that)
-    (getBWCBDD, that.getBWCBDD) match {
-      case (Some(bdd1), Some(bdd2)) => {
-        val op1 = new IntSet[I](bdd1)
-        val op2 = new IntSet[I](bdd2)
-        new IntLikeSet[I, T](bits, op1 plus op2)
-      }
-      case _ => assert(false)
-    }
+  def plus(that : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
+    val (norm, ov) = this.plusWithCarry(that)
+    norm | ov
   }
   def plusWithCarry(that : IntLikeSet[I, T]) = {
     checkBitWidth(this, that)
-    val (noOv, ov) = set plusWithCarry that.set
-    (new IntLikeSet[I, T](bits, noOv), new IntLikeSet[I, T](bits, ov))
+    (getBWCBDD, that.getBWCBDD) match {
+      case (Some(bdd1), Some(bdd2)) => {
+        val (norm, ov) = CBDD.plus(bdd1, bdd2, bits)
+        (fromBWCBDD(norm), fromBWCBDD(ov))
+      }
+      case _ => {
+        assert(false, "Integrity failure in plus")
+        ???
+      }
+    }
   }
-  def negate = new IntLikeSet[I, T](bits, set.negate)
-  */
+  def negate = getBWCBDD match {
+    case Some(bdd) => fromBWCBDD(CBDD.negate(bits, bdd))
+    case _ => {
+      assert(false, "Integrity failure in negate")
+      ???
+    }
+  }
+  def bAnd(that : IntLikeSet[I, T]) = {
+    checkBitWidth(this, that)
+    new IntLikeSet[I, T](bits, set bAnd that.set)
+  }
+  def bOr(that : IntLikeSet[I, T]) = {
+    checkBitWidth(this, that)
+    new IntLikeSet[I, T](bits, set bOr that.set)
+  }
+  def bXOr(that : IntLikeSet[I, T]) = {
+    checkBitWidth(this, that)
+    new IntLikeSet[I, T](bits, set bXOr that.set)
+  }
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
       case _ if depth == 0 => true
       case Node(False, uset) => helper(uset, depth - 1)
       case _ => false
     }
-    assert(helper(set.cbdd, boundedBits.bits - bits))
+    assert(helper(set.cbdd, boundedBits.bits - bits), "Integrity failure in explicit check")
   }
   def iterator() = new IntLikeSetIterator(this)
   def java = this.asJava

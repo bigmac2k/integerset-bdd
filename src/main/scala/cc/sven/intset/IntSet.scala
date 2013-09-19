@@ -125,7 +125,7 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     val res = CBDD.plus(this.cbdd, that.cbdd, boundedBits.bits)
     (new IntSet(res._1), new IntSet(res._2))
   }
-  def negate = this.bNot plus (new IntSet[T](CBDD(List.fill(boundedBits.bits - 1)(false) ++ List(true))))
+  def negate = new IntSet[T](CBDD.negate(boundedBits.bits, cbdd))
   def unary_- = this.negate
   //XXX this function is a stub
   def mult(that: IntSet[T]): IntSet[T] = {
@@ -134,11 +134,13 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     val thatIval = Ival(that.min, that.max)
     null
   }
-  def bAndRef(that: IntSet[T]): IntSet[T] = new IntSet(CBDD.bitwiseOp(_ && _)(cbdd, that.cbdd))
-  def bOrRef(that: IntSet[T]): IntSet[T] = new IntSet(CBDD.bitwiseOp(_ || _)(cbdd, that.cbdd))
-  def bXOr(that: IntSet[T]): IntSet[T] = new IntSet(CBDD.bitwiseOp(_ != _)(cbdd, that.cbdd))
+  /*def bAndRef(that: IntSet[T]): IntSet[T] = bitwiseOp(_ && _)(that.cbdd))
+  def bOrRef(that: IntSet[T]): IntSet[T] = bitwiseOp(_ || _)(that.cbdd))
+  def bXOrRef(that: IntSet[T]): IntSet[T] = bitwiseOp(_ != _)(that.cbdd))*/
+  def bitwiseOp(op : (Boolean, Boolean) => Boolean)(that : IntSet[T]) : IntSet[T] = new IntSet(CBDD.bitwiseOp(op)(this.cbdd, that.cbdd))
   def bAnd(that : IntSet[T]) : IntSet[T] = new IntSet(CBDD.bAnd(cbdd, that.cbdd))
   def bOr(that : IntSet[T]) : IntSet[T] = new IntSet(CBDD.bOr(cbdd, that.cbdd))
+  def bXOr(that : IntSet[T]) : IntSet[T] = new IntSet(CBDD.bXOr(cbdd, that.cbdd))
   def bNot: IntSet[T] = new IntSet(CBDD.bNot(cbdd))
   //XXX rework to trivial version - require n bit int - how to do this?
   /*def bitExtract(from: Int, to: Int): IntSet[T] = {

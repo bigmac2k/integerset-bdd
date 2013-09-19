@@ -173,6 +173,10 @@ object CBDD {
       addMerge(ff, ft, tf, tt)
     }
   }
+  def negate(bits : Int, bdd : CBDD) = {
+    val (ov, norm) = plus(bNot(bdd), (CBDD(List.fill(bits - 1)(false) ++ List(true))), bits)
+    ov || norm
+  }
   private def bitwiseOpHelper(op: (Boolean, Boolean) => Boolean)(trueFalseTuples: List[((CBDD, Boolean), (CBDD, Boolean))]): CBDD = {
     val trueFalse = trueFalseTuples.distinct.partition((t) => op(t._1._2, t._2._2))
     val nset = ((False: CBDD) /: trueFalse._1)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
@@ -242,13 +246,28 @@ object CBDD {
       trueRecurse(x)
     }
     case (_, True) => bOr(op2, op1)
-    case (Node(set1, uset1), Node(set2, uset2)) =>{
+    case (Node(set1, uset1), Node(set2, uset2)) => {
       val tt = bOr(set1, set2)
       val ft = if(set1 == uset1) tt else bOr(uset1, set2)
       val ff = if(set2 == uset2) ft else bOr(uset1, uset2)
       val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else bOr(set1, uset2)
       val nset = union3(tt, ft, tf)
       Node(nset, ff)
+    }
+  }
+  def bXOr(op1 : CBDD, op2 : CBDD) : CBDD = (op1, op2) match {
+    case (False, _) => False
+    case (_, False) => bXOr(op2, op1)
+    case (True, _) => True
+    case (_, True) => bXOr(op2, op1)
+    case (Node(set1, uset1), Node(set2, uset2)) => {
+      val tt = bXOr(set1, set2)
+      val ft = if(set1 == uset1) tt else bXOr(uset1, set2)
+      val ff = if(set2 == uset2) ft else bXOr(uset1, uset2)
+      val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else bXOr(set1, uset2)
+      val nset = ft || tf
+      val nuset = tt || ff
+      Node(nset, nuset)
     }
   }
   def bNot(op1: CBDD): CBDD = op1 match {
