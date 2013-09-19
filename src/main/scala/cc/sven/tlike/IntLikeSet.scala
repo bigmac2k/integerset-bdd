@@ -23,15 +23,77 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val eleI = castTI(ele)._2
     new IntLikeSet[I, T](bits, set - eleI)
   }
+  def remove(ele : T) = this - ele
   def +(ele : T) = {
     checkBitWidth(this, ele)
     val eleI = castTI(ele)._2
     new IntLikeSet[I, T](bits, set + eleI)
   }
+  def add(ele : T) = this + ele
   def contains(ele : T) = {
     checkBitWidth(this, ele)
     val eleI = castTI(ele)
     set contains eleI._2
+  }
+  def unary_! = new IntLikeSet[I, T](bits, !set)
+  def invert = !this
+  def ite(t : IntLikeSet[I, T], e : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
+    checkBitWidth(this, t)
+    checkBitWidth(t, e)
+    new IntLikeSet(bits, set.ite(t.set, e.set))
+  }
+  def intersect(that : IntLikeSet[I, T]) = {
+    checkBitWidth(this, that)
+    new IntLikeSet[I, T](bits, set intersect that.set)
+  }
+  def &(that : IntLikeSet[I, T]) = this intersect that
+  def union(that : IntLikeSet[I, T]) = {
+    checkBitWidth(this, that)
+    new IntLikeSet[I, T](bits, set union that.set)
+  }
+  def |(that : IntLikeSet[I, T]) = this union that
+  def max = castIT((bits, set.max))
+  def min = castIT((bits, set.min))
+  def sizeBigInt = set.sizeBigInt
+  def randomElement() = castIT((bits, set.randomElement()))
+  def subsetOf(that : IntLikeSet[I, T]) = {
+    checkBitWidth(this, that)
+    set subsetOf that.set
+  }
+  override def isEmpty = set.isEmpty
+  override def nonEmpty = set.nonEmpty
+  private def getBWCBDD = set.cbdd.partialEval(List.fill(boundedBits.bits - bits)(false))
+  private def fromBWCBDD(bdd : CBDD) = new IntLikeSet[I, T](bits, new IntSet[I](CBDD(List.fill(boundedBits.bits - bits)(false), False, False, bdd)))
+  //TODO (reimplement for bit width)
+  def isFull = getBWCBDD match {
+    case Some(True) => true
+    case _ => false
+  }
+  /*def plus(that : IntLikeSet[I, T]) = {
+    checkBitWidth(this, that)
+    (getBWCBDD, that.getBWCBDD) match {
+      case (Some(bdd1), Some(bdd2)) => {
+        val op1 = new IntSet[I](bdd1)
+        val op2 = new IntSet[I](bdd2)
+        new IntLikeSet[I, T](bits, op1 plus op2)
+      }
+      case _ => assert(false)
+    }
+  }
+  def plusWithCarry(that : IntLikeSet[I, T]) = {
+    checkBitWidth(this, that)
+    val (noOv, ov) = set plusWithCarry that.set
+    (new IntLikeSet[I, T](bits, noOv), new IntLikeSet[I, T](bits, ov))
+  }
+  def negate = new IntLikeSet[I, T](bits, set.negate)
+  */
+  def checkIntegrity() {
+    def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
+      case _ if depth == 0 => true
+      case Node(False, uset) => helper(uset, depth - 1)
+      case _ => false
+    }
+    assert(helper(set.cbdd, boundedBits.bits - bits))
   }
   def iterator() = new IntLikeSetIterator(this)
   def java = this.asJava

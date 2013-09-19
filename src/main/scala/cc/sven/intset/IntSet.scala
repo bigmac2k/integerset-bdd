@@ -69,14 +69,13 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
   def unary_! = new IntSet[T](!cbdd)
   def invert = !this
   def ite(t: IntSet[T], e: IntSet[T]) = new IntSet[T](cbdd.ite(t.cbdd, e.cbdd))
-  def partialEval(bs: List[Boolean]) = new IntSet[T](cbdd.partialEval(bs))
   def +(elem: T): IntSet[T] = new IntSet[T](cbdd || IntSet.apply[T](elem)(int, bounded, boundedBits).cbdd)
   def add(elem: T) = this + elem
   def -(elem: T): IntSet[T] = new IntSet[T](cbdd && !IntSet.apply[T](elem)(int, bounded, boundedBits).cbdd)
   def remove(elem: T) = this - elem
-  def contains(elem: T): Boolean = partialEval(IntSet.toBitVector(elem)).cbdd match {
-    case True  => true
-    case False => false
+  def contains(elem: T): Boolean = cbdd.partialEval(IntSet.toBitVector(elem)) match {
+    case Some(True)  => true
+    case _ => false
   }
   def iterator() = new IntSetIterator(this)
   override def empty = new IntSet(False)
@@ -163,6 +162,8 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     val res = plus(this.cbdd, that.cbdd, boundedBits.bits)
     (new IntSet(res._1), new IntSet(res._2))
   }
+  def negate = this.bNot plus (new IntSet[T](CBDD(List.fill(boundedBits.bits - 1)(false) ++ List(true))))
+  def unary_- = this.negate
   //XXX this function is a stub
   def mult(that: IntSet[T]): IntSet[T] = {
     import int.{ mkNumericOps, mkOrderingOps }
@@ -199,9 +200,10 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     }
   }
   def bAndRef(that: IntSet[T]): IntSet[T] = new IntSet(bitwiseOp(_ && _)(cbdd, that.cbdd))
-  def bOr(that: IntSet[T]): IntSet[T] = new IntSet(bitwiseOp(_ || _)(cbdd, that.cbdd))
+  //reimplement like bAnd below
+  def bOrRef(that: IntSet[T]): IntSet[T] = new IntSet(bitwiseOp(_ || _)(cbdd, that.cbdd))
   def bXOr(that: IntSet[T]): IntSet[T] = new IntSet(bitwiseOp(_ != _)(cbdd, that.cbdd))
-  def bAnd(op1: CBDD, op2: CBDD): CBDD = (op1, op2) match {
+  private def bAnd(op1: CBDD, op2: CBDD): CBDD = (op1, op2) match {
     case (False, _) => False
     case (_, False) => bAnd(op2, op1)
     case (True, x) => {
@@ -227,6 +229,32 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     }  
   }
   def bAnd(that : IntSet[T]) : IntSet[T] = new IntSet(bAnd(cbdd, that.cbdd))
+  private def bOr(op1 : CBDD, op2 : CBDD) : CBDD = (op1, op2) match {
+    case (False, _) => False
+    case (_, False) => bOr(op2, op1)
+    case (True, x) => {
+      def trueRecurse(bdd : CBDD) : CBDD = bdd match {
+        case False => False
+        case True => True
+        case Node(set, uset) => {
+          val nuset = trueRecurse(uset)
+          val nset = trueRecurse(set) || nuset
+          Node(nset, nuset)
+        }
+      }
+      trueRecurse(x)
+    }
+    case (_, True) => bOr(op2, op1)
+    case (Node(set1, uset1), Node(set2, uset2)) =>{
+      val tt = bOr(set1, set2)
+      val ft = if(set1 == uset1) tt else bOr(uset1, set2)
+      val ff = if(set2 == uset2) ft else bOr(uset1, uset2)
+      val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else bOr(set1, uset2)
+      val nset = union3(tt, ft, tf)
+      Node(nset, ff)
+    }
+  }
+  def bOr(that : IntSet[T]) : IntSet[T] = new IntSet(bOr(cbdd, that.cbdd))
   private def bitwiseNotHelper(op1: CBDD): CBDD = op1 match {
     case False           => False
     case True            => True

@@ -51,11 +51,12 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   def &&(that: CBDD) = ite(that, False)
   def ||(that: CBDD) = ite(True, that)
   def implies(that: CBDD) = ite(that, True)
-  def partialEval(bs: List[Boolean]): CBDD = (bs, this) match {
-    case (_, False)                 => False
-    case (_, True)                  => True
+  def partialEval(bs: List[Boolean]): Option[CBDD] = (bs, this) match {
+    case (_, False)                 => Some(False)
+    case (_, True)                  => Some(True)
     case (true :: bs_, Node(t, _))  => t.partialEval(bs_)
     case (false :: bs_, Node(_, f)) => f.partialEval(bs_)
+    case _ => None
   }
   def trueMost: Option[List[Boolean]] = this match {
     case False             => None
