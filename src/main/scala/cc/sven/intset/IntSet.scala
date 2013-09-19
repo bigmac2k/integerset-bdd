@@ -132,7 +132,7 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     import int.{ mkNumericOps, mkOrderingOps }
     val thisIval = Ival(this.min, this.max)
     val thatIval = Ival(that.min, that.max)
-    null
+    ???
   }
   /*def bAndRef(that: IntSet[T]): IntSet[T] = bitwiseOp(_ && _)(that.cbdd))
   def bOrRef(that: IntSet[T]): IntSet[T] = bitwiseOp(_ || _)(that.cbdd))

@@ -64,10 +64,16 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   }
   override def isEmpty = set.isEmpty
   override def nonEmpty = set.nonEmpty
-  private def getBWCBDD = set.cbdd.partialEval(List.fill(boundedBits.bits - bits)(false))
+  private def getBWCBDD = set.cbdd.partialEval(List.fill(boundedBits.bits - bits)(false)) match {
+    case Some(x) => x
+    case _ => {
+      assert(false, "Integrity failure")
+      ???
+    }
+  }
   private def fromBWCBDD(bdd : CBDD) = new IntLikeSet[I, T](bits, new IntSet[I](CBDD(List.fill(boundedBits.bits - bits)(false), False, False, bdd)))
   def isFull = getBWCBDD match {
-    case Some(True) => true
+    case True => true
     case _ => false
   }
   def plus(that : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
@@ -76,24 +82,10 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   }
   def plusWithCarry(that : IntLikeSet[I, T]) = {
     checkBitWidth(this, that)
-    (getBWCBDD, that.getBWCBDD) match {
-      case (Some(bdd1), Some(bdd2)) => {
-        val (norm, ov) = CBDD.plus(bdd1, bdd2, bits)
-        (fromBWCBDD(norm), fromBWCBDD(ov))
-      }
-      case _ => {
-        assert(false, "Integrity failure in plus")
-        ???
-      }
-    }
+    val (norm, ov) = CBDD.plus(getBWCBDD, that.getBWCBDD, bits)
+    (fromBWCBDD(norm), fromBWCBDD(ov))
   }
-  def negate = getBWCBDD match {
-    case Some(bdd) => fromBWCBDD(CBDD.negate(bits, bdd))
-    case _ => {
-      assert(false, "Integrity failure in negate")
-      ???
-    }
-  }
+  def negate = fromBWCBDD(CBDD.negate(bits, getBWCBDD))
   def bAnd(that : IntLikeSet[I, T]) = {
     checkBitWidth(this, that)
     new IntLikeSet[I, T](bits, set bAnd that.set)
@@ -127,11 +119,50 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val iSet = new IntSet[I](nCBDD)
     new IntLikeSet[I, T](toTake, iSet)
   }
+  def signExtend(from : Int, to : Int) : IntLikeSet[I, T] = {
+    require(from >= to && to >= 0)
+    val nBits = bits max (from + 1)
+    assert(nBits <= boundedBits.bits, "Inner type not large enough")
+    val mask = CBDD(List.fill(boundedBits.bits - 1 - from)(false) ++ List.fill(from - to + 1)(true) ++ List.fill(to)(false))
+    val (neg, pos) = getBWCBDD match {
+      case True => (True, True)
+      case False => (False, False)
+      case Node(set, uset) => (Node(set, False), Node(False, uset))
+    }
+    val negBDD = fromBWCBDD(neg).set.cbdd
+    val posBDD = fromBWCBDD(pos).set.cbdd
+    println(new IntSet[I](mask), new IntSet[I](negBDD), new IntSet[I](posBDD))
+    val nBDD = negBDD match {
+      case False => posBDD
+      case _ => CBDD.bOr(negBDD, mask) || posBDD
+    }
+    new IntLikeSet[I, T](nBits, new IntSet[I](nBDD))
+  }
+  def zeroFill(from : Int, to : Int) : IntLikeSet[I, T] = {
+    require(from >= to && to >= 0)
+    val nBits = bits max (from + 1)
+    val mask = CBDD(List.fill(boundedBits.bits - 1 - from)(true) ++ List.fill(from - to + 1)(false) ++ List.fill(to)(true))
+    val nBDD = CBDD.bAnd(set.cbdd, mask)
+    new IntLikeSet[I, T](nBits, new IntSet[I](nBDD))
+  }
 }
 object IntLikeSet {
   def apply[I, T](bits : Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I]()(int, bounded, boundedBits))
   def apply[I, T](bits : Int, set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I](set.map(castTI(_)._2))(int, bounded, boundedBits))
   def apply[I, T](set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], tboundedBits : BoundedBits[T], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = apply(tboundedBits.bits, set)
+  def applyJLong[T](bits : Int)(implicit dboundedBits : DynBoundedBits[T], castTI : Castable[T, cc.sven.misc.Pair[Integer, java.lang.Long]], castIT : Castable[cc.sven.misc.Pair[Integer, java.lang.Long], T]) : IntLikeSet[java.lang.Long, T] = {
+    import cc.sven.misc.Pair
+    implicit val castITT = new Castable[(Int, java.lang.Long), T] {
+      def apply(p : (Int, java.lang.Long)) = castIT(Pair(p._1, p._2))
+    }
+    implicit val castTIT = new Castable[T, (Int, java.lang.Long)] {
+      def apply(t : T) : (Int, java.lang.Long) = {
+        val temp = castTI(t)
+        (temp._1, temp._2)
+      }
+    }
+    apply[java.lang.Long, T](bits)(cc.sven.integral.Implicits.jLongIsIntegral, cc.sven.bounded.Bounded.jLongIsBounded, cc.sven.bounded.BoundedBits.jLongIsBoundedBits, dboundedBits, castTIT, castITT)
+  }
 }
 
 object Implicits {
