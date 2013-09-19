@@ -136,7 +136,128 @@ object CBDD {
     case true :: path_  => Node(CBDD(path_, set, uset, terminal), uset)
     case false :: path_ => Node(set, CBDD(path_, set, uset, terminal))
   }
+  def union3(a: CBDD, b: CBDD, c: CBDD): CBDD = List(a, b, c).distinct.reduce(_ || _)
+  type CBDDTuple = (CBDD, CBDD)
+  def addMerge(ff: CBDDTuple, ft: CBDDTuple, tf: CBDDTuple, tt: CBDDTuple): CBDDTuple = {
+    val trueOVNot = union3(tf._1, ft._1, ff._2)
+    val falseOVNot = ff._1
+    val trueOV = tt._2
+    val falseOV = union3(tt._1, tf._2, ft._2)
+    (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
+  }
+  def plus(op1: CBDD, op2: CBDD, depth: Int): CBDDTuple = (op1, op2) match {
+    case (False, _) => (False, False)
+    case (x, False) => plus(False, x, depth)
+    case (True, True) => {
+      val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
+      (True, ov)
+    }
+    case (Node(set, uset), True) => {
+      val tt = plus(set, True, depth - 1)
+      val tf = tt
+      val ff = plus(uset, True, depth - 1)
+      val ft = ff
+      addMerge(ff, ft, tf, tt)
+    }
+    case (True, x) => plus(x, True, depth)
+    case (Node(set1, uset1), Node(set2, uset2)) => {
+      /*optimization:
+       * op1 == op2 -> op1 << 1 XXX
+       * set1 == uset1 -> tt = ft, tf = ff
+       * set2 == uset2 -> tt = tf, ft = ff
+       */
+      val tt = plus(set1, set2, depth - 1)
+      val ft = if (set1 == uset1) tt else plus(uset1, set2, depth - 1)
+      val ff = if (set2 == uset2) ft else plus(uset1, uset2, depth - 1)
+      val tf = if (set1 == uset1) ff else if (set2 == uset2) tt else plus(set1, uset2, depth - 1)
+      addMerge(ff, ft, tf, tt)
+    }
+  }
+  private def bitwiseOpHelper(op: (Boolean, Boolean) => Boolean)(trueFalseTuples: List[((CBDD, Boolean), (CBDD, Boolean))]): CBDD = {
+    val trueFalse = trueFalseTuples.distinct.partition((t) => op(t._1._2, t._2._2))
+    val nset = ((False: CBDD) /: trueFalse._1)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
+    val nuset = ((False: CBDD) /: trueFalse._2)((acc, t) => acc || bitwiseOp(op)(t._1._1, t._2._1))
+    Node(nset, nuset)
+  }
+  //XXX should probably be specialized
+  def bitwiseOp(op: (Boolean, Boolean) => Boolean)(op1: CBDD, op2: CBDD): CBDD = (op1, op2) match {
+    case (False, _)   => False
+    case (x, False)   => bitwiseOp(op)(False, x)
+    case (True, True) => True
+    case (Node(set, uset), True) => {
+      val trueFalseTuples = List(((set, true), (True, true)), ((set, true), (True, false)), ((uset, false), (True, true)), ((uset, false), (True, false)))
+      bitwiseOpHelper(op)(trueFalseTuples)
+    }
+    case (True, Node(set, uset)) => { //list this case explicitly to not force op to be commutative
+      val trueFalseTuples = List(((True, true), (set, true)), ((True, true), (uset, false)), ((True, false), (set, true)), ((True, false), (uset, false)))
+      bitwiseOpHelper(op)(trueFalseTuples)
+    }
+    case (Node(set1, uset1), Node(set2, uset2)) => {
+      val trueFalseTuples = List(((set1, true), (set2, true)), ((uset1, false), (set2, true)), ((set1, true), (uset2, false)), ((uset1, false), (uset2, false)))
+      /*val trueFalseTuples = for{
+        n1 <- List((set1, true), (uset1, false))
+        n2 <- List((set2, true), (uset2, false))
+      } yield (n1, n2)*/
+      bitwiseOpHelper(op)(trueFalseTuples)
+    }
+  }
+  def bAnd(op1: CBDD, op2: CBDD): CBDD = (op1, op2) match {
+    case (False, _) => False
+    case (_, False) => bAnd(op2, op1)
+    case (True, x) => {
+        def trueRecurse(bdd: CBDD): CBDD = bdd match {
+          case False => False
+          case True  => True
+          case Node(set, uset) => {
+            val nset = trueRecurse(set)
+            val nuset = trueRecurse(uset) || nset
+            Node(nset, nuset)
+          }
+        }
+      trueRecurse(x)
+    }
+    case (_, True) => bAnd(op2, op1)
+    case (Node(set1, uset1), Node(set2, uset2)) => {
+      val tt = bAnd(set1, set2)
+      val ft = if(set1 == uset1) tt else bAnd(uset1, set2)
+      val ff = if(set2 == uset2) ft else bAnd(uset1, uset2)
+      val tf = if(set1 == uset1) ff else if (set2 == uset2) tt else bAnd(set1, uset2)
+      val nuset = union3(tf, ft, ff)
+      Node(tt, nuset)
+    }  
+  }
+  def bOr(op1 : CBDD, op2 : CBDD) : CBDD = (op1, op2) match {
+    case (False, _) => False
+    case (_, False) => bOr(op2, op1)
+    case (True, x) => {
+      def trueRecurse(bdd : CBDD) : CBDD = bdd match {
+        case False => False
+        case True => True
+        case Node(set, uset) => {
+          val nuset = trueRecurse(uset)
+          val nset = trueRecurse(set) || nuset
+          Node(nset, nuset)
+        }
+      }
+      trueRecurse(x)
+    }
+    case (_, True) => bOr(op2, op1)
+    case (Node(set1, uset1), Node(set2, uset2)) =>{
+      val tt = bOr(set1, set2)
+      val ft = if(set1 == uset1) tt else bOr(uset1, set2)
+      val ff = if(set2 == uset2) ft else bOr(uset1, uset2)
+      val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else bOr(set1, uset2)
+      val nset = union3(tt, ft, tf)
+      Node(nset, ff)
+    }
+  }
+  def bNot(op1: CBDD): CBDD = op1 match {
+    case False           => False
+    case True            => True
+    case Node(set, uset) => Node(bNot(uset), bNot(set))
+  }
 }
+
 class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
   private var wl: List[(CBDD, List[Boolean])] = List((cbdd, List.empty))
   private var nextElem: Option[(List[Boolean], List[Boolean])] = None
