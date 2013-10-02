@@ -8,7 +8,6 @@ import scala.collection.JavaConverters._
 import cc.sven.bounded.BoundedBits
 import cc.sven.bounded.Bounded
 import cc.sven.integral.Implicits._
-import scala.math.BigInt.int2bigInt
 
 //XXX Think about having the first bid (msb) have a flipped interpretation for signed values
 
@@ -98,8 +97,23 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
   }
   def sizeBigInt: BigInt = {
     import scala.math.BigInt._
-    (cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length))).sum
+    cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
   }
+  override def size : Int = {
+    val bint = sizeBigInt
+    if(bint > Integer.MAX_VALUE) throw new IllegalArgumentException("size does not fit into an Int")
+    bint.intValue
+  }
+  def sizeGreaterThan(value : BigInt) : Boolean = {
+    import scala.math.BigInt.int2bigInt
+    var size : BigInt = 0
+    for(p <- cbdd.truePaths) {
+      size += 2 pow (boundedBits.bits - p.length)
+      if(size > value) return true
+    }
+    return false
+  }
+  def sizeGreaterThan(value : Int) : Boolean = sizeGreaterThan(value : BigInt)
   def randomElement() = {
     val path = this.cbdd.randomTruePath()
     val path_ = path ++ List.fill(boundedBits.bits - path.length)(scala.util.Random.nextBoolean())

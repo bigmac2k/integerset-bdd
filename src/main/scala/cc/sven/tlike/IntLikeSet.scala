@@ -56,7 +56,25 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   def |(that : IntLikeSet[I, T]) = this union that
   def max = castIT((bits, set.max))
   def min = castIT((bits, set.min))
-  def sizeBigInt = set.sizeBigInt
+  def sizeBigInt = {
+    import scala.math.BigInt.int2bigInt
+    set.cbdd.truePaths.map((x) => 2 pow (bits - x.length)).sum
+  }
+  override def size : Int = {
+    val bint = sizeBigInt
+    if(bint > Integer.MAX_VALUE) throw new IllegalArgumentException("size does not fit into an Int")
+    bint.intValue
+  }
+  def sizeGreaterThan(value : BigInt) : Boolean = {
+    import scala.math.BigInt._
+    var size : BigInt = 0
+    for(p <- set.cbdd.truePaths) {
+      size += 2 pow (bits - p.length)
+      if(size > value) return true
+    }
+    return false
+  }
+  def sizeGreaterThan(value : Int) : Boolean = sizeGreaterThan(value : BigInt)
   def randomElement() = castIT((bits, set.randomElement()))
   def subsetOf(that : IntLikeSet[I, T]) = {
     checkBitWidth(this, that)

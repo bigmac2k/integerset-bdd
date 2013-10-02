@@ -4,6 +4,7 @@ import org.scalacheck.Properties
 import org.scalacheck.Prop.forAll
 import cc.sven.intset._
 import cc.sven.bounded._
+import cc.sven.integral._
 import cc.sven.intset.IntSet
 import scala.sys.BooleanProp
 import cc.sven.misc.Misc._
@@ -205,6 +206,13 @@ object IntSetSpecification extends Properties("IntSet") {
       val us = new IntLikeSet[Int, Int](32, aa.bitExtract(hi, lo).set)
       us == ref
   }
+  /*property("plus IntLike") = {
+    (a : Set[Int], b : Set[Int]) =>
+      //import cc.sven.integral._
+      import cc.sven.tlike.Castable
+      val a_ = IntLikeSet[Long, Int](a)
+      false
+  }*/
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE
