@@ -10,7 +10,6 @@ import scala.sys.BooleanProp
 import cc.sven.misc.Misc._
 import cc.sven.tlike._
 
-
 object IntSetSpecification extends Properties("IntSet") {
   property("bitVector identity[Int]") = forAll((a: Int) => IntSet.fromBitVector[Int](IntSet.toBitVector(a)) == a)
   property("set eq IntSet[Int]") = forAll{
@@ -197,8 +196,9 @@ object IntSetSpecification extends Properties("IntSet") {
     (a_ : Set[Int], b : Int, c : Int) =>
       val a = a_.map(_.abs)
       val aa = IntLikeSet[Int, Int](a)
-      val b_ = b.abs % 32
-      val c_ = c.abs % 32
+      val intBits = implicitly[BoundedBits[Int]].bits
+      val b_ = if(b == Int.MinValue) 1 else b.abs % intBits
+      val c_ = if(c == Int.MinValue) 1 else c.abs % intBits
       val lo = b_ min c_
       val hi = b_ max c_
       val mask = (0 /: (lo to hi).toList)((acc, i) => acc | (1 << i))
@@ -206,13 +206,26 @@ object IntSetSpecification extends Properties("IntSet") {
       val us = new IntLikeSet[Int, Int](32, aa.bitExtract(hi, lo).set)
       us == ref
   }
-  /*property("plus IntLike") = {
-    (a : Set[Int], b : Set[Int]) =>
-      //import cc.sven.integral._
-      import cc.sven.tlike.Castable
-      val a_ = IntLikeSet[Long, Int](a)
-      false
-  }*/
+  property("plus IntLike") = forAll{
+      (a : Set[Long], b : Set[Long], bits : Int) => {
+      val longBits = implicitly[BoundedBits[Long]].bits
+      val bits_ = if(bits == Long.MinValue) 1 else (bits.abs % longBits) + 1
+      def bound(x : Long) = {
+        val max = NBitLong.signContract(bits_ - 1, -1l)
+        val min = NBitLong.signExtend(bits_, (1l << bits_ - 1))
+        if(x == max || x == min) x else if(x >= 0) x % (max + 1) else x % (min - 1)
+      }
+      val aBounded = a.map(bound(_))
+      val bBounded = b.map(bound(_))
+      val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded)((acc, x) => acc + NBitLong(bits_, x))
+      val b_ = (IntLikeSet[Long, NBitLong](bits_) /: bBounded)((acc, x) => acc + NBitLong(bits_, x))
+      val ref = cartesianProduct(aBounded, bBounded).map((x) => NBitLong.signContract(bits_, x._1 + x._2))
+      val us = a_ plus b_
+      val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+      val ref_ = ref.map((x : Long) => castIT((bits_, x)))
+      us == ref_
+      }
+  }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE

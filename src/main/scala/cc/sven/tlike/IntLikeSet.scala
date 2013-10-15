@@ -9,7 +9,7 @@ import java.lang.AssertionError
 import java.lang.AssertionError
 
 class BitWidthException(widthA : Int, widthB : Int) extends Exception {
-  override def toString = widthA.toString + " does not match required " + widthB.toString
+  override def toString = widthB.toString + " does not match required " + widthA.toString
 }
 /* a set for types that wrap ints with a fixed bit width - needs type with fixed bit width that is greater than included */
 class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
@@ -58,13 +58,14 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   def min = castIT((bits, set.min))
   def sizeBigInt = {
     import scala.math.BigInt.int2bigInt
-    set.cbdd.truePaths.map((x) => 2 pow (bits - x.length)).sum
+    set.cbdd.truePaths.map((x) => 1l << (boundedBits.bits - x.length)).sum
   }
   override def size : Int = {
     val bint = sizeBigInt
     if(bint > Integer.MAX_VALUE) throw new IllegalArgumentException("size does not fit into an Int")
     bint.intValue
   }
+  //XXX todo[SCM]: Check!
   def sizeGreaterThan(value : BigInt) : Boolean = {
     import scala.math.BigInt._
     var size : BigInt = 0
@@ -124,7 +125,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     }
     assert(helper(set.cbdd, boundedBits.bits - bits), "Integrity failure in explicit check")
   }
-  def iterator() = new IntLikeSetIterator(this)
+  def iterator() = new IntLikeSetIterator(this)(castIT)
   def java = this.asJava
   def bitExtract(from : Int, to : Int) : IntLikeSet[I, T] = {
     require(from >= to && to >= 0)
@@ -149,7 +150,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     }
     val negBDD = fromBWCBDD(neg).set.cbdd
     val posBDD = fromBWCBDD(pos).set.cbdd
-    println(new IntSet[I](mask), new IntSet[I](negBDD), new IntSet[I](posBDD))
+    //println(new IntSet[I](mask), new IntSet[I](negBDD), new IntSet[I](posBDD))
     val nBDD = negBDD match {
       case False => posBDD
       case _ => CBDD.bOr(negBDD, mask) || posBDD
@@ -190,7 +191,7 @@ object Implicits {
 }
 
 class IntLikeSetIterator[I, T](ilsi : IntLikeSet[I, T])(implicit castIT : Castable[(Int, I), T]) extends Iterator[T] {
-  val ilsiIter = ilsi.set.iterator
-  def hasNext() = ilsiIter.hasNext
-  def next() = castIT(ilsi.bits, ilsiIter.next)
+  val ilsiIter = ilsi.set.iterator()
+  def hasNext() = ilsiIter.hasNext()
+  def next() = castIT((ilsi.bits, ilsiIter.next()))
 }
