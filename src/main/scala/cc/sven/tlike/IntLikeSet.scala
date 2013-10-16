@@ -117,6 +117,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     checkBitWidth(this, that)
     new IntLikeSet[I, T](bits, set bXOr that.set)
   }
+  //XXX todo[SCM] bug - only apply to relevant bits
+  def bNot = fromBWCBDD(CBDD.bNot(getBWCBDD))
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
       case _ if depth == 0 => true

@@ -192,7 +192,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val ref = a.map(-_)
       ref == aa.bNot.plus(IntSet(1))
   }
-  property("bit Extract") = forAll{
+  property("bit Extract IntLikeSet") = forAll{
     (a_ : Set[Int], b : Int, c : Int) =>
       val a = a_.map(_.abs)
       val aa = IntLikeSet[Int, Int](a)
@@ -206,26 +206,11 @@ object IntSetSpecification extends Properties("IntSet") {
       val us = new IntLikeSet[Int, Int](32, aa.bitExtract(hi, lo).set)
       us == ref
   }
-  property("plus IntLike") = forAll{
-      (a : Set[Long], b : Set[Long], bits : Int) => {
-      val longBits = implicitly[BoundedBits[Long]].bits
-      val bits_ = if(bits == Long.MinValue) 1 else (bits.abs % longBits) + 1
-      def bound(x : Long) = {
-        val max = NBitLong.signContract(bits_ - 1, -1l)
-        val min = NBitLong.signExtend(bits_, (1l << bits_ - 1))
-        if(x == max || x == min) x else if(x >= 0) x % (max + 1) else x % (min - 1)
-      }
-      val aBounded = a.map(bound(_))
-      val bBounded = b.map(bound(_))
-      val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded)((acc, x) => acc + NBitLong(bits_, x))
-      val b_ = (IntLikeSet[Long, NBitLong](bits_) /: bBounded)((acc, x) => acc + NBitLong(bits_, x))
-      val ref = cartesianProduct(aBounded, bBounded).map((x) => NBitLong.signContract(bits_, x._1 + x._2))
-      val us = a_ plus b_
-      val castIT = implicitly[Castable[(Int, Long), NBitLong]]
-      val ref_ = ref.map((x : Long) => castIT((bits_, x)))
-      us == ref_
-      }
-  }
+  property("plus IntLike") = forAll{longBittedOp((_ + _), _ plus _)}
+  property("and IntLike") = forAll{longBittedOp((_ & _), _ bAnd _)}
+  property("or IntLike") = forAll{longBittedOp((_ | _), _ bOr _)}
+  property("negate IntLike") = forAll{(a : Set[Long], b : Int) => longBittedOp((x, _) => -x, (x, _) => x.negate)(a, Set(1l), b)}
+  property("bNot IntLike") = forAll{(a : Set[Long], b : Int) => longBittedOp((x, _) => ~x, (x, _) => x.bNot)(a, Set(1l), b)}
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE
