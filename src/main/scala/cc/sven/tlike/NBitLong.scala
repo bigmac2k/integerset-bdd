@@ -19,14 +19,14 @@ object NBitLong {
     val longBits = implicitly[BoundedBits[Long]].bits
     val signMask = 1l << (bits - 1)
     val extendedValue = if((signMask & value) == 0) value else {
-      val extendMask : Long = (1l /: List.range(bits, longBits))((acc, p) => acc | (1l << p))
+      val extendMask : Long = (0l /: List.range(bits, longBits))((acc, p) => acc | (1l << p))
       value | extendMask
     }
     extendedValue
   }
   def signContract(bits : Int, value : Long) : Long = {
     val longBits = implicitly[BoundedBits[Long]].bits
-    val mask : Long = (1l /: List.range(0, bits))((acc, p) => acc | (1l << p))
+    val mask : Long = (0l /: List.range(0, bits))((acc, p) => acc | (1l << p))
     value & mask
   }
   def apply(bits : Int, value : Long) = {

@@ -65,12 +65,11 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     if(bint > Integer.MAX_VALUE) throw new IllegalArgumentException("size does not fit into an Int")
     bint.intValue
   }
-  //XXX todo[SCM]: Check!
   def sizeGreaterThan(value : BigInt) : Boolean = {
     import scala.math.BigInt._
     var size : BigInt = 0
     for(p <- set.cbdd.truePaths) {
-      size += 2 pow (bits - p.length)
+      size += 2 pow (boundedBits.bits - p.length)
       if(size > value) return true
     }
     return false
