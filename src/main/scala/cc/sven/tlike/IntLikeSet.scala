@@ -118,6 +118,14 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   }
   //XXX todo[SCM] bug - only apply to relevant bits
   def bNot = fromBWCBDD(CBDD.bNot(getBWCBDD))
+  def bRor(steps : Int) = {
+    require(steps >= 0)
+    fromBWCBDD(CBDD(List.fill(steps min bits)(false), False, False, getBWCBDD.take(bits - steps)))
+  }
+  def bRol(steps : Int) = {
+    require(steps >= 0)
+    fromBWCBDD(CBDD.bAnd(getBWCBDD.dropOr(steps min bits), CBDD( List.fill(bits - steps)(true) ++ List.fill(steps min bits)(false) )))
+  }
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
       case _ if depth == 0 => true

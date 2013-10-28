@@ -206,11 +206,19 @@ object IntSetSpecification extends Properties("IntSet") {
       val us = new IntLikeSet[Int, Int](32, aa.bitExtract(hi, lo).set)
       us == ref
   }
-  property("plus IntLike") = forAll{longBittedOp((_ + _), _ plus _)}
-  property("and IntLike") = forAll{longBittedOp((_ & _), _ bAnd _)}
-  property("or IntLike") = forAll{longBittedOp((_ | _), _ bOr _)}
-  property("negate IntLike") = forAll{(a : Set[Long], b : Int) => longBittedOp((x, _) => -x, (x, _) => x.negate)(a, Set(1l), b)}
-  property("bNot IntLike") = forAll{(a : Set[Long], b : Int) => longBittedOp((x, _) => ~x, (x, _) => x.bNot)(a, Set(1l), b)}
+  property("plus IntLike") = forAll{longBittedOp(((_, x, y) => x + y), _ plus _)}
+  property("and IntLike") = forAll{longBittedOp(((_, x, y) => x & y), _ bAnd _)}
+  property("or IntLike") = forAll{longBittedOp(((_, x, y) => x | y), _ bOr _)}
+  property("negate IntLike") = forAll{(a : Set[Long], b : Int) => longBittedOp((_, x, _) => -x, (x, _) => x.negate)(a, Set(1l), b)}
+  property("bNot IntLike") = forAll{(a : Set[Long], b : Int) => longBittedOp((_, x, _) => ~x, (x, _) => x.bNot)(a, Set(1l), b)}
+  property("bRor IntLike") = forAll{
+    (a : Set[Long], bits : Int, toShift : Long) =>
+      longBittedOp((bits_, x, s) => NBitLong.signContract(bits_, x) >>> s, (x, s) => x.bRor(s.randomElement().getValue.intValue))(a, Set((toShift % implicitly[BoundedBits[Long]].bits).abs), bits)
+  }
+  property("bRol IntLike") = forAll{
+    (a : Set[Long], bits : Int, toShift : Long) =>
+      longBittedOp((bits_, x, s) => NBitLong.signContract(bits_, x) << s, (x, s) => x.bRol(s.randomElement().getValue.intValue))(a, Set((toShift % implicitly[BoundedBits[Long]].bits).abs), bits)
+  }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE

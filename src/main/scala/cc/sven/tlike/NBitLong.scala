@@ -5,6 +5,7 @@ import cc.sven.bounded._
 class NBitLong(val bits : Int, val value : Long) {
   import scala.math.BigInt.int2bigInt
   require(value < (2 pow bits))
+  def getValue = NBitLong.signExtend(bits, value)
   override def equals(that : Any) = that match {
     case that : NBitLong => bits == that.bits && value == that.value
     case _ => false

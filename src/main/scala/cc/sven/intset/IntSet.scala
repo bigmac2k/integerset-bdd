@@ -156,14 +156,6 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
   def bOr(that : IntSet[T]) : IntSet[T] = new IntSet(CBDD.bOr(cbdd, that.cbdd))
   def bXOr(that : IntSet[T]) : IntSet[T] = new IntSet(CBDD.bXOr(cbdd, that.cbdd))
   def bNot: IntSet[T] = new IntSet(CBDD.bNot(cbdd))
-  //XXX rework to trivial version - require n bit int - how to do this?
-  /*def bitExtract(from: Int, to: Int): IntSet[T] = {
-    require(from <= to && from < boundedBits.bits && to < boundedBits.bits && from >= 0 && to >= 0)
-    val bvMask = List.fill(boundedBits.bits - to - 1)(false) ++ List.fill(to + 1 - from)(true) ++ List.fill(from)(false)
-    assert(bvMask.length == boundedBits.bits)
-    val mask = IntSet.fromBitVector(bvMask)(int, bounded, boundedBits)
-    this bAnd IntSet(mask)
-  }*/
   def java = this.asJava
 }
 

@@ -115,6 +115,11 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case True => mapF(True)
   }
   def dropOr(toDrop : Int) = this.drop(toDrop, False, (x : CBDD) => x, (a : CBDD, b : CBDD) => a || b)
+  def replaceWith(toReplace : CBDD, toReplaceWith : CBDD) : CBDD = if(this == toReplace) toReplaceWith else this match {
+    case True => True
+    case False => False
+    case Node(set, uset) => Node(set.replaceWith(toReplace, toReplaceWith), uset.replaceWith(toReplace, toReplaceWith))
+  }
   override def toString() = bdd.toString(compl)
   override def equals(that: Any) = that match {
     case t: CBDD => compl == t.compl && bdd == t.bdd
