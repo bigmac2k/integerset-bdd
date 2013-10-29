@@ -67,6 +67,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   }
   def sizeGreaterThan(value : BigInt) : Boolean = {
     import scala.math.BigInt._
+    require(value >= 0)
     var size : BigInt = 0
     for(p <- set.cbdd.truePaths) {
       size += 2 pow (boundedBits.bits - p.length)
@@ -118,13 +119,28 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   }
   //XXX todo[SCM] bug - only apply to relevant bits
   def bNot = fromBWCBDD(CBDD.bNot(getBWCBDD))
-  def bRor(steps : Int) = {
+  def bShr(steps : Int) = {
     require(steps >= 0)
     fromBWCBDD(CBDD(List.fill(steps min bits)(false), False, False, getBWCBDD.take(bits - steps)))
   }
-  def bRol(steps : Int) = {
+  def bShl(steps : Int) = {
     require(steps >= 0)
     fromBWCBDD(CBDD.bAnd(getBWCBDD.dropOr(steps min bits), CBDD( List.fill(bits - steps)(true) ++ List.fill(steps min bits)(false) )))
+  }
+  def bSar(steps : Int) = {
+    require(steps >= 0)
+    val bdd = getBWCBDD
+    val (negCBDD, posCBDD) = bdd match {
+      case True => (True, True)
+      case False => (False, False)
+      case Node(set, uset) => (set, uset)
+    }
+    val toPrepend = (bits - 1) min steps
+    val toTake = bits - steps - 1
+    //println("Bits: " + bits + ", steps: " + steps + ", toPrepend: " + toPrepend + ", toTake: " + toTake + ", toPrepend + toTake: " + (toPrepend + toTake))
+    val negRes = CBDD(true :: List.fill(toPrepend)(true), False, False, negCBDD.take(toTake))
+    val posRes = CBDD(false :: List.fill(toPrepend)(false), False, False, posCBDD.take(toTake))
+    fromBWCBDD(negRes || posRes)
   }
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {

@@ -30,6 +30,12 @@ object NBitLong {
     val mask : Long = (0l /: List.range(0, bits))((acc, p) => acc | (1l << p))
     value & mask
   }
+  def boundBits(bits : Int) = if(bits == Long.MinValue) 1 else (bits.abs % implicitly[BoundedBits[Long]].bits) + 1
+  def bound(x : Long, bits : Int) = {
+    val max = NBitLong.signContract(bits - 1, -1l)
+    val min = NBitLong.signExtend(bits, (1l << bits - 1))
+    if(x == max || x == min) x else if(x >= 0) x % (max + 1) else x % (min - 1)
+  }
   def apply(bits : Int, value : Long) = {
     val min = signExtend(bits, (1l << bits - 1))
     val max = signContract(bits - 1, -1)
