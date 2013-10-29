@@ -9,53 +9,7 @@ import cc.sven.bounded.BoundedBits
 import cc.sven.bounded.Bounded
 import cc.sven.integral.Implicits._
 
-//XXX Think about having the first bid (msb) have a flipped interpretation for signed values
 
-//XXX rework ivals such that they can be empty (add bottom element?)
-sealed abstract trait Ival[+T] extends Iterable[T] with IterableLike[T, Iterable[T]] {
-  def lo: T
-  def hi: T
-}
-object Ival {
-  def apply[T](lo: T, hi: T)(implicit int: Integral[T]): Ival[T] = {
-    import int.{ mkNumericOps, mkOrderingOps }
-    if (lo > hi) EmptyIval else FilledIval(lo, hi)
-  }
-}
-case object EmptyIval extends Ival[Nothing] {
-  def lo = throw new IllegalArgumentException("lo on empty interval")
-  def hi = throw new IllegalArgumentException("hi on empty interval")
-  def iterator() = EmptyIterator
-  override def toString() = "[]"
-}
-object EmptyIterator extends Iterator[Nothing] {
-  def hasNext = false
-  def next() = throw new NoSuchElementException("next on empty iterator")
-}
-final case class FilledIval[T](val lo: T, val hi: T)(implicit int: Integral[T]) extends Ival[T] {
-  import int.{ mkNumericOps, mkOrderingOps }
-  require(lo <= hi)
-  def iterator = new IvalIterator(this)
-  override def toString() = "[" + lo.toString + " .. " + hi.toString + "]"
-}
-class IvalIterator[T](ival: Ival[T])(implicit int: Integral[T]) extends Iterator[T] {
-  import int.{ mkNumericOps, mkOrderingOps }
-  private var currIval = ival
-  def hasNext() = currIval match {
-    case EmptyIval          => false
-    case FilledIval(lo, hi) => true
-  }
-  def next() = currIval match {
-    case FilledIval(lo, hi) if (lo == hi) => {
-      currIval = EmptyIval
-      lo
-    }
-    case FilledIval(lo, hi) => {
-      currIval = FilledIval(lo + int.one, hi)
-      lo
-    }
-  }
-}
 
 class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]) extends Set[T] with SetLike[T, IntSet[T]] {
   //enumeration
@@ -141,13 +95,6 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
   }
   def negate = new IntSet[T](CBDD.negate(boundedBits.bits, cbdd))
   def unary_- = this.negate
-  //XXX this function is a stub
-  def mult(that: IntSet[T]): IntSet[T] = {
-    import int.{ mkNumericOps, mkOrderingOps }
-    val thisIval = Ival(this.min, this.max)
-    val thatIval = Ival(that.min, that.max)
-    ???
-  }
   /*def bAndRef(that: IntSet[T]): IntSet[T] = bitwiseOp(_ && _)(that.cbdd))
   def bOrRef(that: IntSet[T]): IntSet[T] = bitwiseOp(_ || _)(that.cbdd))
   def bXOrRef(that: IntSet[T]): IntSet[T] = bitwiseOp(_ != _)(that.cbdd))*/
@@ -207,7 +154,7 @@ object IntSet {
       bdd || ibdd
   })
   def apply[T](s: java.util.Set[T])(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = apply(s.asScala.toSet)
-  def apply[T](ival: Ival[T])(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = {
+  /*def apply[T](ival: Ival[T])(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = {
     import int.{ mkNumericOps, mkOrderingOps }
       def smallerBV(fullLenBV: List[Boolean]) = CBDD(fullLenBV, False, True, True)
       def greaterBV(fullLenBV: List[Boolean]) = CBDD(fullLenBV, True, False, True)
@@ -220,7 +167,7 @@ object IntSet {
       }
       case FilledIval(lo, hi) => new IntSet(smallerBV(toBitVector(hi)) && greaterBV(toBitVector(lo)))
     }
-  }
+  }*/
   def apply[T <: FiniteOrderedIntegral[T]](ele: T): IntSet[T] = IntSet(Set[T](ele))(ele, ele, ele)
   /*def apply(i : Integer) : IntSet[Integer] = {
     val int = implicitly[Integral[Integer]]

@@ -84,7 +84,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val c = a + b
       IntSet(c).max == c.max
   }
-  property("ival set") = forAll{
+  /*property("ival set") = forAll{
     (a : Int, b : Int) =>
       val a_ = a % 1000
       val b_ = b % 1000
@@ -94,7 +94,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val refSet = ival.toSet
       val bddSet = IntSet(ival)
       bddSet.forall(refSet.contains(_)) && refSet.forall(bddSet.contains(_))
-  }
+  }*/
   property("intersect") = forAll{
     (a : Set[Int], b : Set[Int]) =>
       val refSet = a & b

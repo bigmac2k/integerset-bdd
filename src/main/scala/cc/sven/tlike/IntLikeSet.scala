@@ -37,7 +37,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val eleI = castTI(ele)
     set contains eleI._2
   }
-  def unary_! = new IntLikeSet[I, T](bits, !set)
+  def unary_! = fromBWCBDD(!getBWCBDD)
   def invert = !this
   def ite(t : IntLikeSet[I, T], e : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
     checkBitWidth(this, t)
