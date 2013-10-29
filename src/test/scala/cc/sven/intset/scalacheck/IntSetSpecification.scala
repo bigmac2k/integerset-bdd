@@ -11,7 +11,7 @@ import cc.sven.misc.Misc._
 import cc.sven.tlike._
 
 object IntSetSpecification extends Properties("IntSet") {
-  /*property("bitVector identity[Int]") = forAll((a: Int) => IntSet.fromBitVector[Int](IntSet.toBitVector(a)) == a)
+  property("bitVector identity[Int]") = forAll((a: Int) => IntSet.fromBitVector[Int](IntSet.toBitVector(a)) == a)
   property("set eq IntSet[Int]") = forAll{
     (a : Set[Int]) =>
       val b = IntSet(a)
@@ -48,6 +48,16 @@ object IntSetSpecification extends Properties("IntSet") {
       val b = (IntSet[Int]() /: bs)(_ + _)
       val c = (IntSet[Int]() /: cs)(_ + _)
       b.cbdd.bdd eq c.cbdd.bdd
+  }
+  property("set hashCode") = forAll{
+    (a : Set[Int]) =>
+      val as = a.toList
+      val bs = util.Random.shuffle(as)
+      val cs = util.Random.shuffle(as)
+      //Build sets randomly - just to be sure
+      val b = (IntSet[Int]() /: bs)(_ + _)
+      val c = (IntSet[Int]() /: cs)(_ + _)
+      b.hashCode == c.hashCode
   }
   property("set size equal") = forAll{
     (a : Set[Int]) =>
@@ -233,10 +243,27 @@ object IntSetSpecification extends Properties("IntSet") {
       val b = IntLikeSet[Long, NBitLong](bits_, a_.map(NBitLong(bits_, _)))
       val c_ = if(c == Int.MinValue) 1 else c.abs
       (a_.size > c_) == b.sizeGreaterThan(c_)
-  }*/
+  }
   property("bSar IntLike") = forAll{
     (a : Set[Long], bits : Int, toShift : Long) =>
       longBittedOp((bits_, x, s) => NBitLong.signContract(bits_, NBitLong.signExtend(bits_, NBitLong.signContract(bits_, x)) >> s), (x, s) => x.bSar(s.randomElement().getValue.intValue))(a, Set((toShift % implicitly[BoundedBits[Long]].bits).abs), bits)
+  }
+  /*XXX this sounds funny - how exactly does the default hashCode function work?
+   * I thought it would work by reference. yet the following test passes?
+   * Does it work by attribute?
+   * (same for set above)
+   */
+  property("hashCode IntLike") = forAll{
+    (a : Set[Long], bits : Int) =>
+      val bits_ = NBitLong.boundBits(bits)
+      val a_ = a.map(NBitLong.bound(_, bits_))
+      val as = a_.toList
+      val bs = util.Random.shuffle(as)
+      val cs = util.Random.shuffle(as)
+      //Build sets randomly - just to be sure
+      val b = (IntLikeSet[Long, NBitLong](bits_) /: bs)((acc, x) => acc + NBitLong(bits_, x))
+      val c = (IntLikeSet[Long, NBitLong](bits_) /: cs)((acc, x) => acc + NBitLong(bits_, x))
+      b.hashCode == c.hashCode
   }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
