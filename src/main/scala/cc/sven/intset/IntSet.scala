@@ -8,6 +8,7 @@ import scala.collection.JavaConverters._
 import cc.sven.bounded.BoundedBits
 import cc.sven.bounded.Bounded
 import cc.sven.integral.Implicits._
+import cc.sven.interval._
 
 
 
@@ -154,20 +155,20 @@ object IntSet {
       bdd || ibdd
   })
   def apply[T](s: java.util.Set[T])(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = apply(s.asScala.toSet)
-  /*def apply[T](ival: Ival[T])(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = {
+  def apply[T](ival: Interval[T])(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]): IntSet[T] = {
     import int.{ mkNumericOps, mkOrderingOps }
-      def smallerBV(fullLenBV: List[Boolean]) = CBDD(fullLenBV, False, True, True)
-      def greaterBV(fullLenBV: List[Boolean]) = CBDD(fullLenBV, True, False, True)
+    def smallerBV(fullLenBV: List[Boolean]) = CBDD(fullLenBV, False, True, True)
+    def greaterBV(fullLenBV: List[Boolean]) = CBDD(fullLenBV, True, False, True)
     ival match {
       case EmptyIval => IntSet(Set[T]())
       case FilledIval(lo, hi) if (lo < int.zero) => {
-        val greaterSet = apply(Ival(int.zero, hi))
+        val greaterSet = apply(FilledIval(int.zero, hi))
         val smallerSet = new IntSet(greaterBV(toBitVector(lo)) && smallerBV(toBitVector(int.min(-int.one, hi))))(int, bounded, boundedBits)
         greaterSet union smallerSet
       }
       case FilledIval(lo, hi) => new IntSet(smallerBV(toBitVector(hi)) && greaterBV(toBitVector(lo)))
     }
-  }*/
+  }
   def apply[T <: FiniteOrderedIntegral[T]](ele: T): IntSet[T] = IntSet(Set[T](ele))(ele, ele, ele)
   /*def apply(i : Integer) : IntSet[Integer] = {
     val int = implicitly[Integral[Integer]]

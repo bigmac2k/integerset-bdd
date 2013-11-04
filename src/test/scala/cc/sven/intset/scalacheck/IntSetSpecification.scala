@@ -265,6 +265,25 @@ object IntSetSpecification extends Properties("IntSet") {
       val c = (IntLikeSet[Long, NBitLong](bits_) /: cs)((acc, x) => acc + NBitLong(bits_, x))
       b.hashCode == c.hashCode
   }
+  property("mul IntLike") = forAll{
+    (a : Set[Long], b : Set[Long], bits : Int, depths : Int) => {
+      val longBits = implicitly[BoundedBits[Long]].bits
+      val bits_ = NBitLong.boundBits(bits)
+      val depths_ = NBitLong.boundBits(depths)
+      val aBounded = a.map(NBitLong.bound(_, bits_))
+      val bBounded = b.map(NBitLong.bound(_, bits_))
+      val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded)((acc, x) => acc + NBitLong(bits_, x))
+      val b_ = (IntLikeSet[Long, NBitLong](bits_) /: bBounded)((acc, x) => acc + NBitLong(bits_, x))
+      val ref = cartesianProduct(aBounded, bBounded).map((x) => x._1 * x._2)
+      //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
+      val us = a_.mul(depths_)(b_)
+      val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+      val ref_ = ref.map((x : Long) => castIT((bits_ * 2, x)))
+      val res = ref_.forall(us.contains)
+      //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+      res
+      }
+  }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE
@@ -272,11 +291,11 @@ object IntSetSpecification extends Properties("IntSet") {
    isEmpty [- SCM -] DONE
    iterator [- SCM -] TEST: implicitly via ==?
    liste von elementen [- SCM -] DONE
-   bitextract: first:last bits ausschneiden
+   bitextract: first:last bits ausschneiden [- SCM -] DONE
    set mul set
-   set plus set
-   signextend
-   zerofill
+   set plus set [- SCM -] DONE
+   signextend [- SCM -] DONE
+   zerofill [- SCM -] DONE
    Zur info: Jakstab RTL operators:
 	UNKNOWN,
 	

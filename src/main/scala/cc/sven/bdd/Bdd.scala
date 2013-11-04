@@ -142,6 +142,17 @@ object CBDD {
     case true :: path_  => Node(CBDD(path_, set, uset, terminal), uset)
     case false :: path_ => Node(set, CBDD(path_, set, uset, terminal))
   }
+  def apply(path1 : List[Boolean], path2 : List[Boolean]) : CBDD = {
+    def checker(p1 : List[Boolean], p2 : List[Boolean]) : Boolean = (p1, p2) match {
+      case (true :: p1_, true :: p2_) => checker(p1_, p2_)
+      case (false :: p1_, false :: p2_) => checker(p1_, p2_)
+      case (false :: _, true :: _) => true
+      case (Nil, Nil) => true
+      case _ => false
+    }
+    require(checker(path1, path2))
+    apply(path1, True, False, True) && apply(path2, False, True, True)
+  }
   def union3(a: CBDD, b: CBDD, c: CBDD): CBDD = List(a, b, c).distinct.reduce(_ || _)
   type CBDDTuple = (CBDD, CBDD)
   def addMerge(ff: CBDDTuple, ft: CBDDTuple, tf: CBDDTuple, tt: CBDDTuple): CBDDTuple = {

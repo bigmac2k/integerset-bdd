@@ -22,7 +22,7 @@ object Misc {
       val castIT = implicitly[Castable[(Int, Long), NBitLong]]
       val ref_ = ref.map((x : Long) => castIT((bits_, x)))
       val res = us == ref_
-      if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + (us == ref_).toString)
+      if(!res) println("inputa_: " + a_ + ", inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
       res
       }
 }

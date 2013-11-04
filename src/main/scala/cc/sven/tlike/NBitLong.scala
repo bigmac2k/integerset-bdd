@@ -2,7 +2,7 @@ package cc.sven.tlike
 
 import cc.sven.bounded._
 
-class NBitLong(val bits : Int, val value : Long) {
+class NBitLong(val bits : Int, private val value : Long) {
   import scala.math.BigInt.int2bigInt
   require(value < (2 pow bits))
   def getValue = NBitLong.signExtend(bits, value)
@@ -10,7 +10,7 @@ class NBitLong(val bits : Int, val value : Long) {
     case that : NBitLong => bits == that.bits && value == that.value
     case _ => false
   }
-  override def hashCode = value.intValue
+  override def hashCode = (bits, value).hashCode
   override def toString = {
     "|" + bits.toString + ":" + NBitLong.signExtend(bits, value).toString + "|"
   }
@@ -49,7 +49,7 @@ object NBitLong {
     apply(longBits, value)
   }
   class NBitLongIsOrderedC extends Ordering[NBitLong] {
-    def compare(a : NBitLong, b : NBitLong) : Int = implicitly[Ordering[Long]].compare(a.value, b.value)
+    def compare(a : NBitLong, b : NBitLong) : Int = implicitly[Ordering[Long]].compare(a.getValue, b.getValue)
   }
   implicit val NBitLongIsOrdered = new NBitLongIsOrderedC
   implicit object NBitLongIsDynBoundedBits extends DynBoundedBits[NBitLong] {
@@ -63,33 +63,33 @@ object NBitLong {
   implicit object NBitLongIsIntegral extends NBitLongIsOrderedC with Integral[NBitLong] {
     def plus(x : NBitLong, y : NBitLong) : NBitLong = {
       require(x.bits == y.bits)
-      apply(x.bits, x.value + y.value)
+      new NBitLong(x.bits, signContract(x.bits, x.value + y.value))
     }
     def minus(x : NBitLong, y : NBitLong) : NBitLong = {
       require(x.bits == y.bits)
-      apply(x.bits, x.value - y.value)
+      new NBitLong(x.bits, signContract(x.bits, x.value - y.value))
     }
     def times(x : NBitLong, y : NBitLong) : NBitLong = {
       require(x.bits == y.bits)
-      apply(x.bits, x.value * y.value)
+      new NBitLong(x.bits, signContract(x.bits, x.value * y.value))
     }
     def quot(x : NBitLong, y : NBitLong) : NBitLong = {
       require(x.bits == y.bits)
-      apply(x.bits, x.value / y.value)
+      new NBitLong(x.bits, signContract(x.bits, x.value / y.value))
     }
     def rem(x : NBitLong, y : NBitLong) : NBitLong = {
       require(x.bits == y.bits)
-      apply(x.bits, x.value % y.value)
+      new NBitLong(x.bits, signContract(x.bits, x.value % y.value))
     }
-    def negate(x : NBitLong) : NBitLong = apply(x.bits, -x.value)
+    def negate(x : NBitLong) : NBitLong = new NBitLong(x.bits, signContract(x.bits, -x.getValue))
     def fromInt(x : Int) : NBitLong = {
       val boundedBits = implicitly[BoundedBits[Int]]
       apply(boundedBits.bits, x.toLong)
     }
-    def toInt(x : NBitLong) : Int = x.value.toInt
-    def toLong(x : NBitLong) : Long = x.value
-    def toFloat(x : NBitLong) : Float = x.value.toFloat
-    def toDouble(x : NBitLong) : Double = x.value.toDouble
+    def toInt(x : NBitLong) : Int = x.getValue.toInt
+    def toLong(x : NBitLong) : Long = x.getValue
+    def toFloat(x : NBitLong) : Float = x.getValue.toFloat
+    def toDouble(x : NBitLong) : Double = x.getValue.toDouble
   }
   implicit object NBitLongIsLongCastable extends Castable[NBitLong, (Int, Long)] {
     def apply(x : NBitLong) : (Int, Long) = (x.bits, x.value)

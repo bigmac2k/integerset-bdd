@@ -4,9 +4,8 @@ import scala.collection.SetLike
 import cc.sven.bdd._
 import cc.sven.intset._
 import cc.sven.bounded._
+import cc.sven.interval._
 import scala.collection.JavaConverters._
-import java.lang.AssertionError
-import java.lang.AssertionError
 
 class BitWidthException(widthA : Int, widthB : Int) extends Exception {
   override def toString = widthB.toString + " does not match required " + widthA.toString
@@ -142,6 +141,87 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val posRes = CBDD(false :: List.fill(toPrepend)(false), False, False, posCBDD.take(toTake))
     fromBWCBDD(negRes || posRes)
   }
+  //XXX how to deal with odering restriction?
+  /*private*/ def toIvalSetT(depths : Int)(implicit ord : Ordering[T]) = toIvalSetI(depths).map{
+    case FilledIval(lo, hi) => FilledIval(castIT(bits, lo), castIT(bits, hi))
+  }
+  def toIvalSetI(depths : Int) = (Set[Interval[I]]() /: getBWCBDD.take(depths).truePaths){
+    (acc, path) =>
+      path match {
+        case List() => {
+          val v1 = IntSet.fromBitVector(true :: List.fill(bits - 1)(false))
+          val v2 = IntSet.fromBitVector(false :: List.fill(bits - 1)(true))
+          acc + FilledIval(v1, v2)
+        }
+        case _ => {
+          val plen = path.length
+          val path1 = path ++ List.fill(bits - plen)(false)
+          val path2 = path ++ List.fill(bits - plen)(true)
+          val v1 = IntSet.fromBitVector(path1)
+          val v2 = IntSet.fromBitVector(path2)
+          acc + FilledIval(v1, v2)
+        }
+      }
+  }
+  /*
+   * As specified in RTLOperation.java, pentium.ssl mul always doubles
+   * bitWidth. Furthermore, original implementation computes on long
+   * and ignores overflow - we do the same...
+   */
+  def mul(depths : Int)(that : IntLikeSet[I, T]) = {
+    import int.{ mkNumericOps, mkOrderingOps }
+    import cc.sven.interval.Interval._
+    val ivalInt = implicitly[Arith[Interval[I]]]
+    import ivalInt.mkArithOps
+    val ivalSet1 = toIvalSetI(depths)
+    val ivalSet2 = that.toIvalSetI(depths)
+    val bits_ = bits * 2
+    val ivalRes = for{
+      a <- ivalSet1
+      b <- ivalSet2
+    } yield {
+      //(a * b)
+      (a, b) match {
+        case (EmptyIval, _) => EmptyIval
+        case (_, EmptyIval) => EmptyIval
+        case (FilledIval(lo1, hi1), FilledIval(lo2, hi2)) => {
+          //force BigInt operation because fuck it - I want results!
+          //this will have a special place int he hall of shame
+          //XXX SCM : Change this horrible thing!
+          val a = BigInt(lo1.toLong) * BigInt(lo2.toLong)
+          val b = BigInt(lo1.toLong) * BigInt(hi2.toLong)
+          val c = BigInt(hi1.toLong) * BigInt(lo2.toLong)
+          val d = BigInt(hi1.toLong) * BigInt(hi2.toLong)
+          val lo = a min b min c min d
+          val hi = a max b max c max d
+          val a_ = lo1 * lo2
+          val b_ = lo1 * hi2
+          val c_ = hi1 * lo2
+          val d_ = hi1 * hi2
+          val lo_ = a_ min b_ min c_ min d_
+          val hi_ = a_ max b_ max c_ max d_
+          val lo__ = if(BigInt(lo_.toLong) != lo) bounded.minBound else lo_
+          val hi__ = if(BigInt(hi_.toLong) != hi) bounded.maxBound else hi_
+          FilledIval(lo__, hi__)
+        }
+      }
+    }
+    //println(ivalSet1 + " * " + ivalSet2 + " == " + ivalRes)
+    /*ivalRes.map{
+      case EmptyIval => IntLikeSet[I, T](bits_)
+      case FilledIval(lo, hi) => new IntLikeSet[I, T](bits_, new IntSet[I](CBDD(IntSet.toBitVector(lo), IntSet.toBitVector(hi))))
+    }*/
+    def intLikeFromTo(lo : I, hi : I) = new IntLikeSet[I, T](bits_, new IntSet[I](CBDD(IntSet.toBitVector(lo), IntSet.toBitVector(hi))))
+    (IntLikeSet[I, T](bits_) /: ivalRes){
+      case (acc, EmptyIval) => acc
+      case (acc, FilledIval(lo, hi)) if lo >= int.zero => acc union intLikeFromTo(lo, hi)
+      case (acc, FilledIval(lo, hi)) => {
+        val lower = intLikeFromTo(lo, -int.one)
+        val upper = intLikeFromTo(int.zero, hi)
+        acc union lower union upper
+      }
+    }
+  }
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
       case _ if depth == 0 => true
@@ -194,6 +274,7 @@ object IntLikeSet {
   def apply[I, T](bits : Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I]()(int, bounded, boundedBits))
   def apply[I, T](bits : Int, set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I](set.map(castTI(_)._2))(int, bounded, boundedBits))
   def apply[I, T](set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], tboundedBits : BoundedBits[T], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = apply(tboundedBits.bits, set)
+  //def apply[I, T](bits : Int, set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = ???
   def applyJLong[T](bits : Int)(implicit dboundedBits : DynBoundedBits[T], castTI : Castable[T, cc.sven.misc.Pair[Integer, java.lang.Long]], castIT : Castable[cc.sven.misc.Pair[Integer, java.lang.Long], T]) : IntLikeSet[java.lang.Long, T] = {
     import cc.sven.misc.Pair
     implicit val castITT = new Castable[(Int, java.lang.Long), T] {
