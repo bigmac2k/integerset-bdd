@@ -82,6 +82,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   }
   override def isEmpty = set.isEmpty
   override def nonEmpty = set.nonEmpty
+  def changeBitWidth(nbits : Int) = new IntLikeSet[I, T](nbits, set)
   private def getBWCBDD = set.cbdd.partialEval(List.fill(boundedBits.bits - bits)(false)) match {
     case Some(x) => x
     case _ => {
