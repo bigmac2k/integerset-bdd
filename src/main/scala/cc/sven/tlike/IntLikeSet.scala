@@ -212,7 +212,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
       case EmptyIval => IntLikeSet[I, T](bits_)
       case FilledIval(lo, hi) => new IntLikeSet[I, T](bits_, new IntSet[I](CBDD(IntSet.toBitVector(lo), IntSet.toBitVector(hi))))
     }*/
-    def intLikeFromTo(lo : I, hi : I) = new IntLikeSet[I, T](bits_, new IntSet[I](CBDD(IntSet.toBitVector(lo), IntSet.toBitVector(hi))))
+    //def intLikeFromTo(lo : I, hi : I) = new IntLikeSet[I, T](bits_, new IntSet[I](CBDD(IntSet.toBitVector(lo), IntSet.toBitVector(hi))))
+    /*def intLikeFromTo(lo : I, hi : I) = new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, hi)))
     (IntLikeSet[I, T](bits_) /: ivalRes){
       case (acc, EmptyIval) => acc
       case (acc, FilledIval(lo, hi)) if lo >= int.zero => acc union intLikeFromTo(lo, hi)
@@ -221,7 +222,11 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
         val upper = intLikeFromTo(int.zero, hi)
         acc union lower union upper
       }
-    }
+    }*/
+   (IntLikeSet[I, T](bits_) /: ivalRes){
+     case (acc, EmptyIval) => acc
+     case (acc, FilledIval(lo, hi)) => acc union IntLikeSet.range[I, T](bits_ min boundedBits.bits, lo, hi).changeBitWidth(bits_)
+   }
   }
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
@@ -275,7 +280,6 @@ object IntLikeSet {
   def apply[I, T](bits : Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I]()(int, bounded, boundedBits))
   def apply[I, T](bits : Int, set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I](set.map(castTI(_)._2))(int, bounded, boundedBits))
   def apply[I, T](set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], tboundedBits : BoundedBits[T], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = apply(tboundedBits.bits, set)
-  //def apply[I, T](bits : Int, set : Set[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = ???
   def applyJLong[T](bits : Int)(implicit dboundedBits : DynBoundedBits[T], castTI : Castable[T, cc.sven.misc.Pair[Integer, java.lang.Long]], castIT : Castable[cc.sven.misc.Pair[Integer, java.lang.Long], T]) : IntLikeSet[java.lang.Long, T] = {
     import cc.sven.misc.Pair
     implicit val castITT = new Castable[(Int, java.lang.Long), T] {
@@ -288,6 +292,49 @@ object IntLikeSet {
       }
     }
     apply[java.lang.Long, T](bits)(cc.sven.integral.Implicits.jLongIsIntegral, cc.sven.bounded.Bounded.jLongIsBounded, cc.sven.bounded.BoundedBits.jLongIsBoundedBits, dboundedBits, castTIT, castITT)
+  }
+  //def apply[I, T](ival : FilledIval[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = range[I, T](ival.lo, ival.hi)
+  def apply[I, T](bits : Int, ival : Interval[T])(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = ival match {
+    case EmptyIval => apply[I, T](bits)
+    case FilledIval(lo, hi) => {
+      require(dboundedBits.dBits(lo) == bits)
+      require(dboundedBits.dBits(lo) == dboundedBits.dBits(hi))
+      range[I, T](lo, hi)
+    }
+  }
+  def range[I, T](lo : T, hi : T)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = {
+    val bits_ = dboundedBits.dBits(lo)
+    require(bits_ > 0)
+    require(bits_ == dboundedBits.dBits(hi))
+    val (lobits, lo_) = castTI(lo)
+    val (hibits, hi_) = castTI(hi)
+    require(lobits == hibits)
+    range[I, T](bits_, lo_, hi_)
+  }
+  def range[I, T](bits_ : Int, lo : I, hi : I)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = {
+    //Number is not negative
+    if(!IntSet.toBitVector(lo).drop(boundedBits.bits - bits_).head)
+      new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, hi)))
+    else {
+      val negOne = IntSet.fromBitVector(List.fill(boundedBits.bits - bits_)(false) ++ List.fill(bits_)(true))
+      val zero = IntSet.fromBitVector(List.fill(boundedBits.bits - bits_)(false) ++ List.fill(bits_)(false))
+      val lower = new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, negOne)))
+      val upper = new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(zero, hi)))
+      lower union upper
+    }
+  }
+  def rangeJLong[T](lo : T, hi : T)(implicit dboundedBits : DynBoundedBits[T], castTI : Castable[T, cc.sven.misc.Pair[Integer, java.lang.Long]], castIT : Castable[cc.sven.misc.Pair[Integer, java.lang.Long], T]) : IntLikeSet[java.lang.Long, T] = {
+    import cc.sven.misc.Pair
+    implicit val castITT = new Castable[(Int, java.lang.Long), T] {
+      def apply(p : (Int, java.lang.Long)) = castIT(Pair(p._1, p._2))
+    }
+    implicit val castTIT = new Castable[T, (Int, java.lang.Long)] {
+      def apply(t : T) : (Int, java.lang.Long) = {
+        val temp = castTI(t)
+        (temp._1, temp._2)
+      }
+    }
+    range[java.lang.Long, T](lo, hi)(cc.sven.integral.Implicits.jLongIsIntegral, cc.sven.bounded.Bounded.jLongIsBounded, cc.sven.bounded.BoundedBits.jLongIsBoundedBits, dboundedBits, castTIT, castITT)
   }
 }
 

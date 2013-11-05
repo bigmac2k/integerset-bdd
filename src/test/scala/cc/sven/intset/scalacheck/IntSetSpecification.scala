@@ -266,7 +266,7 @@ object IntSetSpecification extends Properties("IntSet") {
       b.hashCode == c.hashCode
   }
   property("mul IntLike") = forAll{
-    (a : Set[Long], b : Set[Long], bits : Int, depths : Int) => {
+    (a : Set[Long], b : Set[Long], bits : Int, depths : Int) =>
       val longBits = implicitly[BoundedBits[Long]].bits
       val bits_ = NBitLong.boundBits(bits)
       val depths_ = NBitLong.boundBits(depths)
@@ -282,6 +282,21 @@ object IntSetSpecification extends Properties("IntSet") {
       val res = ref_.forall(us.contains)
       //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
       res
+  }
+  property("range IntLike") = forAll{
+    (lo : Long, hi : Long, bits : Int) =>
+      val toTest = 100l
+      val bits_ = NBitLong.boundBits(bits)
+      val lo_ = NBitLong.bound(lo, bits_)
+      val hi_ = NBitLong.bound(hi, bits_)
+      val lo__ = lo_ min hi_
+      val hi__ = lo_ max hi_
+      val set = IntLikeSet.range[Long, NBitLong](NBitLong(bits_, lo__), NBitLong(bits_, hi__))
+      val step = (hi__ - lo__).abs / toTest
+      (true /: List.range(0l, toTest)){
+        (acc, i) =>
+          val test = i * step + lo__
+          acc && set.contains(NBitLong(bits_, test))
       }
   }
 /* [- AW -]

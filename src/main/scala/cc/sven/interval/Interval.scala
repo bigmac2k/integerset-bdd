@@ -3,7 +3,7 @@ package cc.sven.interval
 import scala.math.{ Integral, Fractional }
 
 sealed trait Interval[+T]
-final class FilledIval[+T](private val lo : T, private val hi : T) extends Interval[T] {
+final class FilledIval[+T](val lo : T, val hi : T) extends Interval[T] {
   override def toString = "[" + lo + " .. " + hi + "]"
   override def equals(that : Any) = that match {
     /* Wow holy shit! I must have been drunk out of my mind!
