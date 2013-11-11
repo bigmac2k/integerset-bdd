@@ -164,7 +164,7 @@ object IntSet {
     ival match {
       case EmptyIval => IntSet(Set[T]())
       case FilledIval(lo, hi) if (lo < int.zero) => {
-        val greaterSet = apply(FilledIval(int.zero, hi))
+        val greaterSet = if(hi >= int.zero) apply(FilledIval(int.zero, hi)) else IntSet[T]()
         val smallerSet = new IntSet(greaterBV(toBitVector(lo)) && smallerBV(toBitVector(int.min(-int.one, hi))))(int, bounded, boundedBits)
         greaterSet union smallerSet
       }

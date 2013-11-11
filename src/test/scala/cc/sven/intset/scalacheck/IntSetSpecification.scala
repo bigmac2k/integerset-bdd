@@ -313,6 +313,20 @@ object IntSetSpecification extends Properties("IntSet") {
       val us = set__.restrictGreaterOrEqual(restrict__)
       ref == us
   }
+  property("restrictGreater IntLike") = forAll{
+    (set : Set[Long], restrict : Set[Long], ele : Long, bits : Int) =>
+      val ord = implicitly[Ordering[NBitLong]]
+      import ord.mkOrderingOps
+      val bits_ = NBitLong.boundBits(bits)
+      val set_ = set.map(NBitLong.bound(_, bits_))
+      val restrict_ = (restrict + ele).map(NBitLong.bound(_, bits_))
+      val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)((acc, x) => acc + NBitLong(bits_, x))
+      val restrict__ = (IntLikeSet[Long, NBitLong](bits_) /: restrict_)((acc, x) => acc + NBitLong(bits_, x))
+      val border = restrict__.min
+      val ref = set__.filter(_ > border)
+      val us = set__.restrictGreater(restrict__)
+      ref == us
+  }
   property("restrictLessOrEqual IntLike") = forAll{
     (set : Set[Long], restrict : Set[Long], ele : Long, bits : Int) =>
       val ord = implicitly[Ordering[NBitLong]]
@@ -325,6 +339,20 @@ object IntSetSpecification extends Properties("IntSet") {
       val border = restrict__.max
       val ref = set__.filter(_ <= border)
       val us = set__.restrictLessOrEqual(restrict__)
+      ref == us
+  }
+  property("restrictLess IntLike") = forAll{
+    (set : Set[Long], restrict : Set[Long], ele : Long, bits : Int) =>
+      val ord = implicitly[Ordering[NBitLong]]
+      import ord.mkOrderingOps
+      val bits_ = NBitLong.boundBits(bits)
+      val set_ = set.map(NBitLong.bound(_, bits_))
+      val restrict_ = (restrict + ele).map(NBitLong.bound(_, bits_))
+      val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)((acc, x) => acc + NBitLong(bits_, x))
+      val restrict__ = (IntLikeSet[Long, NBitLong](bits_) /: restrict_)((acc, x) => acc + NBitLong(bits_, x))
+      val border = restrict__.max
+      val ref = set__.filter(_ < border)
+      val us = set__.restrictLess(restrict__)
       ref == us
   }
   property("max IntLike") = forAll{

@@ -322,22 +322,30 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     require(!that.isEmpty)
     require(bits == that.bits)
     import int.mkNumericOps
-    val max = (new IntLikeSet[I, T](boundedBits.bits, IntSet[I](-int.one))).bitExtract(bits - 2, 0).changeBitWidth(bits)
+    val max = if(bits == 1)
+      new IntLikeSet[I, T](bits, IntSet[I](int.zero))
+    else
+      (new IntLikeSet[I, T](boundedBits.bits, IntSet[I](-int.one))).bitExtract(bits - 2, 0).changeBitWidth(bits)
     if(that.min == max.max) IntLikeSet[I, T](bits) else
     if(bits == 1) intersect(!(IntLikeSet[I, T](bits) + that.min)) else {
-      val upper = IntLikeSet[I, T](bits) + (castIT(bits, castTI(that.min)._2 + int.one))
-      restrictGreaterOrEqual(upper)
+      val upper = IntSet.fromBitVector(List.fill(boundedBits.bits - bits)(false) ++ IntSet.toBitVector(castTI(that.min)._2 + int.one).drop(boundedBits.bits - bits))
+      val upperSet = IntLikeSet[I, T](bits) + (castIT(bits, upper))
+      restrictGreaterOrEqual(upperSet)
     }
   }
   def restrictLess(that : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
     require(!that.isEmpty)
     require(bits == that.bits)
     import int.mkNumericOps
-    val min = (new IntLikeSet[I, T](boundedBits.bits, IntSet[I](-int.one))).bitExtract(bits - 2, 0).changeBitWidth(bits).bNot
+    val min = if(bits == 1)
+      new IntLikeSet[I, T](bits, IntSet[I](int.one))
+    else
+      (new IntLikeSet[I, T](boundedBits.bits, IntSet[I](-int.one))).bitExtract(bits - 2, 0).changeBitWidth(bits).bNot
     if(that.max == min.min) IntLikeSet[I, T](bits) else
     if(bits == 1) intersect(!(IntLikeSet[I, T](bits) + that.max)) else {
-      val lower = IntLikeSet[I, T](bits) + (castIT(bits, castTI(that.min)._2 - int.one))
-      restrictLessOrEqual(lower)
+      val lower = IntSet.fromBitVector(List.fill(boundedBits.bits - bits)(false) ++ IntSet.toBitVector(castTI(that.max)._2 - int.one).drop(boundedBits.bits - bits))
+      val lowerSet = IntLikeSet[I, T](bits) + (castIT(bits, lower))
+      restrictLessOrEqual(lowerSet)
     }
   }
 }
