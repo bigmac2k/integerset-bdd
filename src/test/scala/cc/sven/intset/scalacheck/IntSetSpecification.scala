@@ -299,6 +299,48 @@ object IntSetSpecification extends Properties("IntSet") {
           acc && set.contains(NBitLong(bits_, test))
       }
   }
+  property("restrictGreaterOrEqual IntLike") = forAll{
+    (set : Set[Long], restrict : Set[Long], ele : Long, bits : Int) =>
+      val ord = implicitly[Ordering[NBitLong]]
+      import ord.mkOrderingOps
+      val bits_ = NBitLong.boundBits(bits)
+      val set_ = set.map(NBitLong.bound(_, bits_))
+      val restrict_ = (restrict + ele).map(NBitLong.bound(_, bits_))
+      val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)((acc, x) => acc + NBitLong(bits_, x))
+      val restrict__ = (IntLikeSet[Long, NBitLong](bits_) /: restrict_)((acc, x) => acc + NBitLong(bits_, x))
+      val border = restrict__.min
+      val ref = set__.filter(_ >= border)
+      val us = set__.restrictGreaterOrEqual(restrict__)
+      ref == us
+  }
+  property("restrictLessOrEqual IntLike") = forAll{
+    (set : Set[Long], restrict : Set[Long], ele : Long, bits : Int) =>
+      val ord = implicitly[Ordering[NBitLong]]
+      import ord.mkOrderingOps
+      val bits_ = NBitLong.boundBits(bits)
+      val set_ = set.map(NBitLong.bound(_, bits_))
+      val restrict_ = (restrict + ele).map(NBitLong.bound(_, bits_))
+      val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)((acc, x) => acc + NBitLong(bits_, x))
+      val restrict__ = (IntLikeSet[Long, NBitLong](bits_) /: restrict_)((acc, x) => acc + NBitLong(bits_, x))
+      val border = restrict__.max
+      val ref = set__.filter(_ <= border)
+      val us = set__.restrictLessOrEqual(restrict__)
+      ref == us
+  }
+  property("max IntLike") = forAll{
+    (set : Set[Long], ele : Long, bits : Int) =>
+      val bits_ = NBitLong.boundBits(bits)
+      val set_ = (set + ele).map((x) => NBitLong(bits_, NBitLong.bound(x, bits_)))
+      val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)(_ + _)
+      set_.max == set__.max
+  }
+  property("min IntLike") = forAll{
+    (set : Set[Long], ele : Long, bits : Int) =>
+      val bits_ = NBitLong.boundBits(bits)
+      val set_ = (set + ele).map((x) => NBitLong(bits_, NBitLong.bound(x, bits_)))
+      val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)(_ + _)
+      set_.min == set__.min
+  }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE

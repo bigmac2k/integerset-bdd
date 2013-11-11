@@ -104,6 +104,8 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
   def bOr(that : IntSet[T]) : IntSet[T] = new IntSet(CBDD.bOr(cbdd, that.cbdd))
   def bXOr(that : IntSet[T]) : IntSet[T] = new IntSet(CBDD.bXOr(cbdd, that.cbdd))
   def bNot: IntSet[T] = new IntSet(CBDD.bNot(cbdd))
+  def lessThan(that : IntSet[T]) : IntSet[T] = intersect(IntSet(FilledIval(bounded.minBound, that.max)))
+  def greaterThan(that : IntSet[T]) : IntSet[T] = intersect(IntSet(FilledIval(that.min, bounded.maxBound)))
   def java = this.asJava
 }
 

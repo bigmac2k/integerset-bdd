@@ -53,8 +53,30 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     new IntLikeSet[I, T](bits, set union that.set)
   }
   def |(that : IntLikeSet[I, T]) = this union that
-  def max = castIT((bits, set.max))
-  def min = castIT((bits, set.min))
+  def max = castIT(bits, getBWCBDD match {
+    case False => throw new UnsupportedOperationException
+    case True => IntSet.fromBitVector(List.fill(boundedBits.bits - bits + 1)(false) ++ List.fill(bits - 1)(true))
+    case Node(set, False) => {
+      val trueMost = set.trueMost.get.padTo(bits - 1, true)
+      IntSet.fromBitVector(List.fill(boundedBits.bits - bits)(false) ++ (true :: trueMost))(int, bounded, boundedBits)
+    }
+    case Node(_, uset)    => {
+      val trueMost = uset.trueMost.get.padTo(bits - 1, true)
+      IntSet.fromBitVector(List.fill(boundedBits.bits - bits + 1)(false) ++ trueMost)(int, bounded, boundedBits)
+    }
+  })
+  def min = castIT(bits, getBWCBDD match {
+    case False => throw new UnsupportedOperationException
+    case True => IntSet.fromBitVector(List.fill(boundedBits.bits - bits)(false) ++ (true :: List.fill(bits - 1)(false)))
+    case Node(False, uset) => {
+      val falseMost = uset.falseMost.get.padTo(bits - 1, false)
+      IntSet.fromBitVector(List.fill(boundedBits.bits - bits + 1)(false) ++ falseMost)(int, bounded, boundedBits)
+    }
+    case Node(set, _)    => {
+      val falseMost = set.falseMost.get.padTo(bits - 1, false)
+      IntSet.fromBitVector(List.fill(boundedBits.bits - bits)(false) ++ (true :: falseMost))(int, bounded, boundedBits)
+    }
+  })
   def sizeBigInt = {
     import scala.math.BigInt.int2bigInt
     set.cbdd.truePaths.map((x) => 1l << (boundedBits.bits - x.length)).sum
@@ -117,7 +139,6 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     checkBitWidth(this, that)
     new IntLikeSet[I, T](bits, set bXOr that.set)
   }
-  //XXX todo[SCM] bug - only apply to relevant bits
   def bNot = fromBWCBDD(CBDD.bNot(getBWCBDD))
   def bShr(steps : Int) = {
     require(steps >= 0)
@@ -275,6 +296,50 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val nBDD = CBDD.bAnd(set.cbdd, mask)
     new IntLikeSet[I, T](nBits, new IntSet[I](nBDD))
   }
+  def restrictGreaterOrEqual(that : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
+    require(!that.isEmpty)
+    require(bits == that.bits)
+    import int.mkNumericOps
+    val max = if(bits == 1)
+      new IntLikeSet[I, T](bits, IntSet[I](int.zero))
+    else
+      (new IntLikeSet[I, T](boundedBits.bits, IntSet[I](-int.one))).bitExtract(bits - 2, 0).changeBitWidth(bits)
+    val allowedSet = IntLikeSet.range[I,T](that.min, max.max)
+    intersect(allowedSet)
+  }
+  def restrictLessOrEqual(that : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
+    require(!that.isEmpty)
+    require(bits == that.bits)
+    import int.mkNumericOps
+    val min = if(bits == 1)
+      new IntLikeSet[I, T](bits, IntSet[I](int.one))
+    else
+      (new IntLikeSet[I, T](boundedBits.bits, IntSet[I](-int.one))).bitExtract(bits - 2, 0).changeBitWidth(bits).bNot
+    val allowedSet = IntLikeSet.range[I, T](min.min, that.max)
+    intersect(allowedSet)
+  }
+  def restrictGreater(that : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
+    require(!that.isEmpty)
+    require(bits == that.bits)
+    import int.mkNumericOps
+    val max = (new IntLikeSet[I, T](boundedBits.bits, IntSet[I](-int.one))).bitExtract(bits - 2, 0).changeBitWidth(bits)
+    if(that.min == max.max) IntLikeSet[I, T](bits) else
+    if(bits == 1) intersect(!(IntLikeSet[I, T](bits) + that.min)) else {
+      val upper = IntLikeSet[I, T](bits) + (castIT(bits, castTI(that.min)._2 + int.one))
+      restrictGreaterOrEqual(upper)
+    }
+  }
+  def restrictLess(that : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
+    require(!that.isEmpty)
+    require(bits == that.bits)
+    import int.mkNumericOps
+    val min = (new IntLikeSet[I, T](boundedBits.bits, IntSet[I](-int.one))).bitExtract(bits - 2, 0).changeBitWidth(bits).bNot
+    if(that.max == min.min) IntLikeSet[I, T](bits) else
+    if(bits == 1) intersect(!(IntLikeSet[I, T](bits) + that.max)) else {
+      val lower = IntLikeSet[I, T](bits) + (castIT(bits, castTI(that.min)._2 - int.one))
+      restrictLessOrEqual(lower)
+    }
+  }
 }
 object IntLikeSet {
   def apply[I, T](bits : Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I]()(int, bounded, boundedBits))
@@ -312,16 +377,27 @@ object IntLikeSet {
     range[I, T](bits_, lo_, hi_)
   }
   def range[I, T](bits_ : Int, lo : I, hi : I)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = {
+    import int.mkOrderingOps
+    def isBitNeg(i : I) = IntSet.toBitVector(i).drop(boundedBits.bits - bits_).head
+    (isBitNeg(lo), isBitNeg(hi)) match {
+      case (false, true) => throw new IllegalArgumentException
+      case (true, false) if lo < int.zero => new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, hi)))
+      case (true, false) => {
+        val negOne = IntSet.fromBitVector(List.fill(boundedBits.bits - bits_)(false) ++ List.fill(bits_)(true))
+        new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, negOne)) union IntSet[I](FilledIval(int.zero, hi)))
+      }
+      case _ => new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, hi)))
+    }
     //Number is not negative
-    if(!IntSet.toBitVector(lo).drop(boundedBits.bits - bits_).head)
+   /* if(!IntSet.toBitVector(lo).drop(boundedBits.bits - bits_).head)
       new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, hi)))
     else {
       val negOne = IntSet.fromBitVector(List.fill(boundedBits.bits - bits_)(false) ++ List.fill(bits_)(true))
-      val zero = IntSet.fromBitVector(List.fill(boundedBits.bits - bits_)(false) ++ List.fill(bits_)(false))
-      val lower = new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, negOne)))
+      val zero = int.zero
+      val lower = new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, negOne min hi)))
       val upper = new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(zero, hi)))
       lower union upper
-    }
+    }*/
   }
   def rangeJLong[T](lo : T, hi : T)(implicit dboundedBits : DynBoundedBits[T], castTI : Castable[T, cc.sven.misc.Pair[Integer, java.lang.Long]], castIT : Castable[cc.sven.misc.Pair[Integer, java.lang.Long], T]) : IntLikeSet[java.lang.Long, T] = {
     import cc.sven.misc.Pair
