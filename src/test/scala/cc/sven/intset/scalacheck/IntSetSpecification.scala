@@ -65,7 +65,7 @@ object IntSetSpecification extends Properties("IntSet") {
   }
   property("invert twice") = forAll{
     (a : Set[Int]) =>
-      (!(!IntSet(a))).seq == a
+      (!(!IntSet(a))) == IntSet(a)
   }
   property("all ints") = forAll{
     import scala.math.BigInt._
@@ -268,7 +268,7 @@ object IntSetSpecification extends Properties("IntSet") {
   property("mul IntLike") = forAll{
     (a : Set[Long], b : Set[Long], bits : Int, depths : Int) =>
       val longBits = implicitly[BoundedBits[Long]].bits
-      val bits_ = NBitLong.boundBits(bits)
+      val bits_ = (NBitLong.boundBits(bits) / 2) max 1
       val depths_ = NBitLong.boundBits(depths)
       val aBounded = a.map(NBitLong.bound(_, bits_))
       val bBounded = b.map(NBitLong.bound(_, bits_))
@@ -285,6 +285,7 @@ object IntSetSpecification extends Properties("IntSet") {
   }
   property("range IntLike") = forAll{
     (lo : Long, hi : Long, bits : Int) =>
+      import scala.math.BigInt._
       val toTest = 100l
       val bits_ = NBitLong.boundBits(bits)
       val lo_ = NBitLong.bound(lo, bits_)
@@ -292,7 +293,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val lo__ = lo_ min hi_
       val hi__ = lo_ max hi_
       val set = IntLikeSet.range[Long, NBitLong](NBitLong(bits_, lo__), NBitLong(bits_, hi__))
-      val step = (hi__ - lo__).abs / toTest
+      val step = (((hi__ : BigInt) - lo__).abs / toTest).longValue
       (true /: List.range(0l, toTest)){
         (acc, i) =>
           val test = i * step + lo__

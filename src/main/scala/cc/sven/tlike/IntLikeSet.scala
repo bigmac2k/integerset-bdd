@@ -18,6 +18,11 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   private def checkBitWidth[A, B](a : A, b : B)(implicit ab : DynBoundedBits[A], bb : DynBoundedBits[B]) {
     if(ab.dBits(a) != bb.dBits(b)) throw new BitWidthException(ab.dBits(a), bb.dBits(b))
   }
+  override def equals(other : Any) = other match {
+    case otherIntLike : IntLikeSet[I, T] => bits == otherIntLike.bits && set == otherIntLike.set
+    case _ => super.equals(other)
+  }
+  override def hashCode() = (bits, set).hashCode()
   override def empty : IntLikeSet[I, T] = new IntLikeSet[I, T](bits, IntSet[I]()(int, bounded, boundedBits))
   def -(ele : T) = {
     checkBitWidth(this, ele)
@@ -195,9 +200,11 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     import cc.sven.interval.Interval._
     val ivalInt = implicitly[Arith[Interval[I]]]
     import ivalInt.mkArithOps
+    checkBitWidth(this, that)
     val ivalSet1 = toIvalSetI(depths)
     val ivalSet2 = that.toIvalSetI(depths)
     val bits_ = bits * 2
+    assert(bits_ <= implicitly[BoundedBits[I]].bits)
     val ivalRes = for{
       a <- ivalSet1
       b <- ivalSet2

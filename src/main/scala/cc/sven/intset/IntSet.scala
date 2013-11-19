@@ -20,6 +20,11 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
    * equals, canEqual
    * diff (--)
    */
+  override def equals(other : Any) = other match {
+    case otherSet : IntSet[T] => cbdd == otherSet.cbdd
+    case _ => super.equals(other)
+  }
+  override def hashCode() = cbdd.hashCode()
   def unary_! = new IntSet[T](!cbdd)
   def invert = !this
   def ite(t: IntSet[T], e: IntSet[T]) = new IntSet[T](cbdd.ite(t.cbdd, e.cbdd))
