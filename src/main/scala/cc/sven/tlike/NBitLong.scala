@@ -57,8 +57,8 @@ object NBitLong {
   }
   implicit object NBitLongIsDynBounded extends DynBounded[NBitLong] {
     import scala.math.BigInt.int2bigInt
-    def dMaxBound(nbl : NBitLong) = apply(nbl.bits, (2 pow (nbl.bits - 1) - 1).longValue)
-    def dMinBound(nbl : NBitLong) = apply(nbl.bits, (2 pow (nbl.bits - 1)).longValue)
+    def dMaxBound(nbl : NBitLong) = apply(nbl.bits, ((2 pow (nbl.bits - 1)) - 1).longValue)
+    def dMinBound(nbl : NBitLong) = apply(nbl.bits, (-(2 pow (nbl.bits - 1))).longValue)
   }
   implicit object NBitLongIsIntegral extends NBitLongIsOrderedC with Integral[NBitLong] {
     def plus(x : NBitLong, y : NBitLong) : NBitLong = {
