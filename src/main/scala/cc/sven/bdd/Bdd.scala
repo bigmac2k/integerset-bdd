@@ -74,7 +74,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   private def computeTruePaths(path: List[Boolean]): Stream[List[Boolean]] = this match {
     case False           => Stream()
     case True            => Stream(path)
-    case Node(set, uset) => set.computeTruePaths(true :: path) ++ uset.computeTruePaths(false :: path)
+    case Node(set, uset) => set.computeTruePaths(true :: path) #::: uset.computeTruePaths(false :: path)
   }
   def truePaths = computeTruePaths(List()).map(_.reverse)
   def randomTruePath() = {
@@ -120,7 +120,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case False => False
     case Node(set, uset) => Node(set.replaceWith(toReplace, toReplaceWith), uset.replaceWith(toReplace, toReplaceWith))
   }
-  override def toString() = bdd.toString(compl)
+  override def toString = bdd.toString(compl)
   override def equals(that: Any) = that match {
     case t: CBDD => compl == t.compl && bdd == t.bdd
     case _       => false
