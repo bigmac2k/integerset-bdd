@@ -23,7 +23,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     case _ => super.equals(other)
   }
   override def hashCode() = (bits, set).hashCode()
-  override def toString = if(isFull) "Set(ANYVAL)" else if(sizeGreaterThan(1000)) "Set(MANYVAL)" else super.toString
+  override def toString = if(isFull) "Set(ANYVAL)" else if(sizeGreaterThan(1000)) "Set(" + this.min + ", MANYVAL, " + this.max + ")" else super.toString
   override def empty : IntLikeSet[I, T] = new IntLikeSet[I, T](bits, IntSet[I]()(int, bounded, boundedBits))
   def -(ele : T) = {
     checkBitWidth(this, ele)
