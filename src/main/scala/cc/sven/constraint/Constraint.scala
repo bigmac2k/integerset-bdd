@@ -29,22 +29,6 @@ object Constraint {
 }
 
 sealed trait Constraint {
-  //simplifies to only LT, LTE, Equals, NEquals, And, Not (i.e. no GT, GTE, Or)
-  /*private def simplify : Constraint = this match {
-    case GT(left, right) => LT(right, left)
-    case GTE(left, right) => LTE(right, left)
-    case Or(left, right) => Not(And(Not(left), Not(right))).simplify
-    case Not(Not(op)) => op.simplify
-    case Not(Equals(left, right)) => NEquals(left, right)
-    case Not(NEquals(left, right)) => Equals(left, right)
-    case Not(LT(left : Int, right : Int)) => GTE(left, right).simplify
-    case Not(LTE(left : Int, right : Int)) => GT(left, right).simplify
-    case Not(GT(left : Int, right : Int)) => LTE(left, right)
-    case Not(GTE(left : Int, right : Int)) => LT(left, right)
-    case Not(Or(left, right)) => And(Not(left).simplify, Not(right).simplify)
-    case And(left, right) => And(left.simplify, right.simplify)
-    case x => x
-  }*/
   def getVarIds : Set[Int] = {
     def helper(iSet : Set[Int], c : Constraint) : Set[Int] = c match {
       case LT(l, r) => iSet + l + r
@@ -64,7 +48,7 @@ sealed trait Constraint {
     val varIds = getVarIds
     //under each variable id of this, there needs to be a non-empty set in table
     require(varIds.forall((x) => !const.isEmpty(table(x))))
-    //Build a state including all valid values
+    //Build a state including all values
     val allFull = (HashMap.empty[Int, S[T]] /: varIds){
       (acc, id) =>
         val setVal = const.min(table(id))
@@ -114,53 +98,8 @@ sealed trait Constraint {
       }
       case (Or(left, right), x) => stateInvert(buildAllValid(And(Not(left), Not(right)), !x))
     }
-    /*def buildAllValid(formula : Constraint) : HashMap[Int, S[T]] = formula match {
-      case LTE(left, right) => {
-        val vleft = table(left)
-        val vright = table(right)
-        val minLeft = const.min(vleft)
-        val maxRight = const.max(vright)
-        println("maxRight: " + maxRight + ", dBounded.dMaxBound(minLeft): " + dBounded.dMaxBound(minLeft))
-        val validLeft = const.range(dBounded.dMinBound(minLeft), maxRight min dBounded.dMaxBound(minLeft))
-        val validRight = const.range(minLeft max dBounded.dMinBound(maxRight), dBounded.dMaxBound(maxRight))
-        allFull + ((left, validLeft)) + ((right, validRight))
-      }
-      case LT(left, right) => {
-        val vleft = table(left)
-        val vright = table(right)
-        val minLeft = const.min(vleft)
-        val maxLeft = const.max(vleft)
-        val minRight = const.min(vright)
-        val maxRight = const.max(vright)
-        val validLeft = if(maxRight > dBounded.dMaxBound(maxLeft))
-          //empty
-          const.invert(const.range(dBounded.dMinBound(maxLeft), dBounded.dMaxBound(maxLeft)))
-        else
-          const.invert(const.range(maxRight, dBounded.dMaxBound(maxLeft)))
-        val validRight = if(maxLeft > dBounded.dMaxBound(minRight))
-          //empty
-          const.invert(const.range(dBounded.dMinBound(maxRight), dBounded.dMaxBound(maxRight)))
-        else
-          const.invert(const.range(dBounded.dMinBound(minRight), minLeft))
-        allFull + ((left, validLeft)) + ((right, validRight))
-      }
-      case Equals(left, right) => {
-        val vleft = table(left)
-        val vright = table(right)
-        val res = const.intersect(vleft, vright)
-        allFull + ((left, res)) + ((right, res))
-      }
-      case NEquals(left, right) => {
-        val vleft = table(left)
-        val vright = table(right)
-        val res = const.invert(const.intersect(vleft, vright))
-      }
-      case Not(op) => buildAllValid(op).map{case (k, v) => (k, const.invert(v))}
-      case And(left, right) => buildAllValid(left).(buildAllValid(right)){
-        case ((k1, v1), (k2, v2)) => (k1, const.intersect(v1, v2))
-      }
-    }
     //stub - should intersect table per value*/
+    //XXX also be aware of empty sets! - return bottom (or do on java side)
     buildAllValid(this, false)
   }
 }
