@@ -2,7 +2,7 @@ name := "bdd"
 
 version := "0.1"
 
-scalaVersion := "2.10.2"
+scalaVersion := "2.10.3"
 
 libraryDependencies += "com.google.guava" % "guava" % "14.0.1"
 
@@ -14,6 +14,6 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.scalacheck" %% "scalacheck" % "1.10.1" % "test"
+  "org.scalacheck" %% "scalacheck" % "1.11.1" % "test"
 )
 

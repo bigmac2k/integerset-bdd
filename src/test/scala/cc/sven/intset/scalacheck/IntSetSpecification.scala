@@ -9,6 +9,10 @@ import cc.sven.intset.IntSet
 import scala.sys.BooleanProp
 import cc.sven.misc.Misc._
 import cc.sven.tlike._
+import cc.sven.constraint._
+import scala.collection.immutable.HashMap
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
 
 object IntSetSpecification extends Properties("IntSet") {
   property("bitVector identity[Int]") = forAll((a: Int) => IntSet.fromBitVector[Int](IntSet.toBitVector(a)) == a)
@@ -369,6 +373,88 @@ object IntSetSpecification extends Properties("IntSet") {
       val set_ = (set + ele).map((x) => NBitLong(bits_, NBitLong.bound(x, bits_)))
       val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)(_ + _)
       set_.min == set__.min
+  }
+  property("constraint tautology") = forAll{
+    (sets : List[(Boolean, Boolean, Int, Long, Set[Long])], bits : Int) => sets match {
+      case List() => true
+      case (x :: xs) => {
+        def buildConstraint(input : (Boolean, Boolean, Int, Long, Set[Long]), i : Int) : (Int, Constraint, HashMap[Int, IntLikeSet[Long, NBitLong]]) = {
+          val (flipl, flipr, ctype, border, set) = input
+          val bits_ = NBitLong.boundBits(bits)
+          val border_ = NBitLong(bits_, NBitLong.bound(border, bits_))
+          val set_ = (if(set.isEmpty) Set[Long](NBitLong.bound(border, bits_)) else set).map(x => NBitLong(bits_, NBitLong.bound(x, bits_)))
+          val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)(_ + _)
+          val border__ = IntLikeSet[Long, NBitLong](bits_) + border_
+          val map = HashMap.empty[Int, IntLikeSet[Long, NBitLong]] + ((i, set__)) + ((i + 1, border__))
+          val i_ = i + 2
+          /*
+           * ctype | contraint on left side
+           * 0 | <
+           * 1 | >
+           * 2 | <=
+           * 3 | >=
+           * 4 | ==
+           * 5 | !=
+           * 
+           * flipl: flip left operands
+           * flipr: flip right operands
+           */
+          def flip(doit : Boolean, c : Constraint) = (doit, c) match {
+            case (false, _) => c
+            case (true, LT(a, b)) => GT(b, a)
+            case (true, GT(a, b)) => LT(b, a)
+            case (true, LTE(a, b)) => GTE(b, a)
+            case (true, GTE(a, b)) => LTE(b, a)
+            case (true, Equals(a, b)) => Equals(b, a)
+            case (true, NEquals(a, b)) => NEquals(b, a)
+          }
+          val constraint = (ctype % 6).abs match {
+            case 0 => Or(flip(flipl, LT(i, i + 1)), flip(flipr, GTE(i, i + 1)))
+            case 1 => Or(flip(flipl, GT(i, i + 1)), flip(flipr, LTE(i, i + 1)))
+            case 2 => Or(flip(flipl, LTE(i, i + 1)), flip(flipr, GT(i, i + 1)))
+            case 3 => Or(flip(flipl, GTE(i, i + 1)), flip(flipr, LT(i, i + 1)))
+            case 4 => Or(flip(flipl, Equals(i, i + 1)), flip(flipr, NEquals(i, i + 1)))
+            case 5 => Or(flip(flipl, NEquals(i, i + 1)), flip(flipr, Equals(i, i + 1)))
+          }
+          //val constraint = if(dir) Or(LT(i, i + 1), GTE(i, i + 1)) else Or(GT(i, i + 1), LTE(i, i + 1))
+          (i_, constraint, map)
+        }
+        val (_, constraint_, map_) = (buildConstraint(x, 0) /: xs){case ((i, const, map), input) =>
+          val (i_, const_, map_) = buildConstraint(input, i)
+          (i_, And(const, const_), map.merged(map_)((_, _) => {assert(false); ???}))
+        }
+        implicit def constrainable = Constraint.intLikeSetIsConstrainable(scala.math.Numeric.LongIsIntegral, Bounded.longIsBounded, BoundedBits.longIsBoundedBits, NBitLong.NBitLongIsDynBoundedBits, NBitLong.NBitLongIsLongCastable, NBitLong.NBitLongIsNBitLongCastable)
+        val mapSolved = constraint_.solve[NBitLong, ({type x[a]=IntLikeSet[Long, a]})#x](map_)
+        //println("map_: " + map_)
+        //println("mapSolved: " + mapSolved)
+        mapSolved == map_
+      }
+    }
+  }
+  //here be dargons... totally inefficient (Lists?) but hey, DRAGONS!
+  implicit val nBitConstraintWithMap : Arbitrary[(Int, HashMap[Int, IntLikeSet[Long, NBitLong]], Constraint)] = Arbitrary {
+    def sequence(xs : List[Gen[(Int, Set[Long])]]) : Gen[List[(Int, Set[Long])]] = (xs :\ (List[(Int, Set[Long])]() : Gen[List[(Int, Set[Long])]])){
+      (m, m_) => for(x <- m; ms <- m_) yield (x :: ms)
+    }
+    for{
+      constraint <- Arbitrary.arbitrary[Constraint]
+      bits <- Arbitrary.arbitrary[Int]
+      val bits_ = NBitLong.boundBits(bits)
+      assocLst <- sequence(constraint.getVarIds.toList.map(id => for(x <- Arbitrary.arbitrary[Set[Long]]) yield (id, (Set[Long](bits) /: x)(_ + _))))
+      val assocLst_ = assocLst.map{case (id, set) => (id, (IntLikeSet[Long, NBitLong](bits_) /: set)((acc, x) => acc + NBitLong(bits_, NBitLong.bound(x, bits_))))}
+      val hashMap = HashMap[Int, IntLikeSet[Long, NBitLong]](assocLst_.toSeq : _*)
+    } yield (bits_, hashMap, constraint)
+  }
+  property("constraint x `and` _: x unaffected") = forAll{
+    (x : (Int, HashMap[Int, IntLikeSet[Long, NBitLong]], Constraint)) =>
+      val (bits, map, constraint) = x
+      require(constraint.getVarIds.forall(id => !map(id).isEmpty))
+      require(!map.contains(0))
+      val constraint_ = And(LTE(0, 0), constraint)
+      val map_ = map + ((0, !IntLikeSet[Long, NBitLong](bits)))
+      implicit def constrainable = Constraint.intLikeSetIsConstrainable(scala.math.Numeric.LongIsIntegral, Bounded.longIsBounded, BoundedBits.longIsBoundedBits, NBitLong.NBitLongIsDynBoundedBits, NBitLong.NBitLongIsLongCastable, NBitLong.NBitLongIsNBitLongCastable)
+      val ref = constraint_.solve[NBitLong, ({type x[a]=IntLikeSet[Long, a]})#x](map_)
+      map_(0) == ref(0)
   }
 /* [- AW -]
    Wichtigere Funktionalitaeten:

@@ -4,6 +4,8 @@ import cc.sven.bounded._
 import scala.collection.immutable.HashMap
 import scala.collection.immutable.Set
 import cc.sven.tlike._
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
 
 trait Constrainable[T, S[_]] {
   def range(lo : T, hi : T) : S[T]
@@ -25,6 +27,25 @@ object Constraint {
       def min(a : IntLikeSet[I, T]) = a.min
       def max(a : IntLikeSet[I, T]) = a.max
       def invert(a : IntLikeSet[I, T]) = !a
+  }
+  implicit val arbitraryConstrainable : Arbitrary[Constraint] = Arbitrary {
+    def step(size : Int) = {/*println("step(" + size + ")");*/ size - 10}
+    val genId = for(x <- Arbitrary.arbitrary[Int]) yield if(x == Int.MinValue) 1 else (x.abs % Int.MaxValue) + 1
+    val genLT = for(id1 <- genId; id2 <- genId) yield LT(id1, id2)
+    val genGT = for(id1 <- genId; id2 <- genId) yield GT(id1, id2)
+    val genLTE = for(id1 <- genId; id2 <- genId) yield LTE(id1, id2)
+    val genGTE = for(id1 <- genId; id2 <- genId) yield GTE(id1, id2)
+    val genEquals = for(id1 <- genId; id2 <- genId) yield Equals(id1, id2)
+    val genNEquals = for(id1 <- genId; id2 <- genId) yield NEquals(id1, id2)
+    val genSimpleConstraint = Gen.oneOf(genLT, genGT, genLTE, genGTE, genEquals, genNEquals)
+    
+    def genConnective(size : Int) : Gen[Constraint] = if(size <= 0) genSimpleConstraint else Gen.frequency((1, genSimpleConstraint), (2, genAnd(step(size))), (2, genOr(step(size))), (2, genNot(step(size))))
+
+    def genAnd(size : Int) = for(op1 <- genConnective(step(size)); op2 <- genConnective(step(size))) yield And(op1, op2)
+    def genOr(size : Int) = for(op1 <- genConnective(step(size)); op2 <- genConnective(step(size))) yield Or(op1, op2)
+    def genNot(size : Int) = for(op <- genConnective(step(size))) yield Not(op)
+    
+    Gen.sized(genConnective)
   }
 }
 
@@ -71,24 +92,26 @@ sealed trait Constraint {
       val rightmax_ = rightMaxBound min rightmax.getOrElse(rightMaxBound)
       val validLeft = const.range(leftmin_, leftmax_)
       val validRight = const.range(rightmin_, rightmax_)
+      //println("leftmin: " + leftmin + ", leftid: " + leftid + ", leftmax: " + leftmax + ", rightmin: " + rightmin + ", rightmax: " + rightmax + ", underapprox: " + underapprox + ", validLeft: " + validLeft + ", validRight: " + validRight)
       (if(underapprox) allEmpty else allFull) + ((leftid, validLeft)) + ((rightid, validRight))
     }
     def buildAllValid(formula : Constraint, underapprox : Boolean) : HashMap[Int, S[T]] = (formula, underapprox) match {
       case (LTE(left, right), false) => valid(None, left, Some(const.max(table(right))), Some(const.min(table(left))), right, None, false)
       case (LTE(left, right), true) =>  valid(None, left, Some(const.min(table(right))), Some(const.max(table(left))), right, None, true)
-      case (GTE(left, right), x) => stateInvert(buildAllValid(LTE(right, left), x))
-      case (LT(left, right), x) => buildAllValid(GTE(left, right), !x)
-      case (GT(left, right), x) => buildAllValid(LT(left, right), x)
+      case (GTE(left, right), x) => buildAllValid(LTE(right, left), x)
+      case (LT(left, right), x) => stateInvert(buildAllValid(GTE(left, right), !x))
+      case (GT(left, right), x) => buildAllValid(LT(right, left), x)
       case (Equals(left, right), false) => {
         val res = const.intersect(table(left), table(right))
         allFull + ((left, res)) + ((right, res))
       }
       case (Equals(left, right), true) => {
         val res = const.intersect(table(left), table(right))
-        if(const.min(res) == const.max(res))
-          allFull + ((left, res)) + ((right, res))
+        //singleton
+        if(!const.isEmpty(res) && const.min(res) == const.max(res))
+          allEmpty + ((left, res)) + ((right, res))
         else
-          allEmpty + ((left, const.invert(allEmpty(left)))) + ((right, const.invert(allEmpty(right))))
+          allEmpty
       }
       case (NEquals(left, right), x) => stateInvert(buildAllValid(Equals(left, right), !x))
       case (Not(op), x) => stateInvert(buildAllValid(op, !x))
@@ -98,9 +121,15 @@ sealed trait Constraint {
       }
       case (Or(left, right), x) => stateInvert(buildAllValid(And(Not(left), Not(right)), !x))
     }
+    //println("buildAllValid(" + formula + ", " + underapprox + ") = " + res)
+    //res
     //stub - should intersect table per value*/
     //XXX also be aware of empty sets! - return bottom (or do on java side)
-    buildAllValid(this, false)
+    val vTable = buildAllValid(this, false)
+    /*println("Constraint: " + this)
+    println(" Table: " + table)
+    println("vTable: " + vTable)*/
+    table.merged(vTable){case ((i, x), (i_, y)) => (i, const.intersect(x, y))}
   }
 }
 final case class LT(left : Int, right : Int) extends Constraint
