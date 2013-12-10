@@ -456,6 +456,22 @@ object IntSetSpecification extends Properties("IntSet") {
       val ref = constraint_.solve[NBitLong, ({type x[a]=IntLikeSet[Long, a]})#x](map_)
       map_(0) == ref(0)
   }
+  //generate random problem, reduce, intersect with inverted reduction, generate concrete states from intersection, check that reduction of concrete state is empty.
+  property("constraint excludes correct") = forAll{
+    val tryTimes = 10
+    (x : (Int, HashMap[Int, IntLikeSet[Long, NBitLong]], Constraint)) =>
+      implicit def constrainable = Constraint.intLikeSetIsConstrainable(scala.math.Numeric.LongIsIntegral, Bounded.longIsBounded, BoundedBits.longIsBoundedBits, NBitLong.NBitLongIsDynBoundedBits, NBitLong.NBitLongIsLongCastable, NBitLong.NBitLongIsNBitLongCastable)
+      val (bits, map, constraint) = x
+      val map_ = constraint.solve[NBitLong, ({type x[a]=IntLikeSet[Long, a]})#x](map)
+      val deleted = map.merged(map_){case ((k1, v1), (k2, v2)) => (k1, v1 intersect !v2)}
+      //println("vars: " + map.keySet.size + ", bits: " + bits + ", deleted: " + deleted.exists{case (_, v) => !v.isEmpty} + ", average set size:" + (map.mapValues(_.sizeBigInt).values.toList.sum / map.size) + ", average delted size: " + (deleted.mapValues(_.sizeBigInt).values.toList.sum / deleted.size) + ", constraint: " + constraint)
+      if(deleted.exists{case (_, v) => v.isEmpty}) true else
+      List.range(0, tryTimes).forall{x =>
+        val concrete = deleted.map{case (k1, v1) => (k1, IntLikeSet[Long, NBitLong](v1.bits) + v1.randomElement())}
+        val check = constraint.solve[NBitLong, ({type x[a]=IntLikeSet[Long, a]})#x](concrete)
+        check.exists{case (_, v) => v.isEmpty}
+      }
+  }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE
