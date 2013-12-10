@@ -83,7 +83,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
       IntSet.fromBitVector(List.fill(boundedBits.bits - bits)(false) ++ (true :: falseMost))(int, bounded, boundedBits)
     }
   })
-  def sizeBigInt = set.cbdd.truePaths.map((x) => 1l << (boundedBits.bits - x.length)).sum
+  def sizeBigInt = set.cbdd.truePaths.map((x) => BigInt(1l << (boundedBits.bits - x.length))).sum
   override def size : Int = {
     val bint = sizeBigInt
     if(bint > Integer.MAX_VALUE) throw new IllegalArgumentException("size does not fit into an Int")
