@@ -188,6 +188,14 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
         }
       }
   }
+  def getNegPos = getBWCBDD match {
+    case Node(set, uset) => (fromBWCBDD(Node(set, False)), fromBWCBDD(Node(False, uset)))
+    case x => (fromBWCBDD(Node(x, False)), fromBWCBDD(Node(False, x)))
+  }
+  /*
+   * should have toivalset such that Set(-1) yields [-1 .. -1] even if depths is only 1
+   *  -> go down bdd until first node with both sub-bdds non false
+   */
   /*
    * As specified in RTLOperation.java, pentium.ssl mul always doubles
    * bitWidth. Furthermore, original implementation computes on long
