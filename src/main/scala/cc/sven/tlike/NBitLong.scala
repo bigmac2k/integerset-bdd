@@ -60,6 +60,8 @@ object NBitLong {
     import scala.math.BigInt.int2bigInt
     def dMaxBound(nbl : NBitLong) = apply(nbl.bits, ((2 pow (nbl.bits - 1)) - 1).longValue)
     def dMinBound(nbl : NBitLong) = apply(nbl.bits, (-(2 pow (nbl.bits - 1))).longValue)
+    def dMaxNeg(nbl : NBitLong) = apply(nbl.bits, -1l)
+    def dMinNotNeg(nbl : NBitLong) = apply(nbl.bits, 0l)
   }
   implicit object NBitLongIsIntegral extends NBitLongIsOrderedC with Integral[NBitLong] {
     def plus(x : NBitLong, y : NBitLong) : NBitLong = {

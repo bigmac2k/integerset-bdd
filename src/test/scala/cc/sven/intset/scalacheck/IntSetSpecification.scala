@@ -471,6 +471,16 @@ object IntSetSpecification extends Properties("IntSet") {
         val check = constraint.solve[NBitLong, ({type x[a]=IntLikeSet[Long, a]})#x](concrete)
         check.exists{case (_, v) => v.isEmpty}
       }
+  property("getNegPos splits correctly") = forAll{
+    (set : Set[Long], bits : Int) =>
+      val bits_ = NBitLong.boundBits(bits)
+      val set_ = set.map(x => NBitLong(bits_, NBitLong.bound(x, bits_)))
+      val bddset_ = (IntLikeSet[Long, NBitLong](bits_) /: set_)((acc, x) => acc + x)
+      val (neg, pos) = set_.partition(x => x.getValue < 0)
+      val (bddneg, bddpos) = bddset_.getNegPos
+      val ownneg = (Set[NBitLong]() /: bddneg)((acc, x) => acc + x)
+      val ownpos = (Set[NBitLong]() /: bddpos)((acc, x) => acc + x)
+      ownneg == neg && ownpos == pos
   }
 /* [- AW -]
    Wichtigere Funktionalitaeten:

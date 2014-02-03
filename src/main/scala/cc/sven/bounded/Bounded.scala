@@ -10,4 +10,6 @@ object Bounded {
 trait Bounded[T] {
   val maxBound: T
   val minBound: T
+  val maxNeg : T
+  val minNotNeg : T
 }

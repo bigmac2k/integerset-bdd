@@ -10,11 +10,13 @@ import org.scalacheck.Gen
 trait Constrainable[T, S[_]] {
   def range(lo : T, hi : T) : S[T]
   def intersect(a : S[T], b : S[T]) : S[T]
+  def union(a : S[T], b : S[T]) : S[T]
   //def intersect[SS >: S[T]](a : SS, b : SS) : S[T]
   def isEmpty(a : S[T]) : Boolean
   def min(a : S[T]) : T
   def max(a : S[T]) : T
   def invert(a : S[T]) : S[T]
+  def getPosNeg(a : S[T]) : (S[T], S[T])
 }
 
 object Constraint {
@@ -23,21 +25,27 @@ object Constraint {
     new Constrainable[T, ({type x[a]=IntLikeSet[I, a]})#x] {
       def range(lo : T, hi : T) = IntLikeSet.range[I, T](lo, hi)
       def intersect(a : IntLikeSet[I, T], b : IntLikeSet[I, T]) = a.intersect(b)
+      def union(a : IntLikeSet[I, T], b : IntLikeSet[I, T]) = a.union(b)
       def isEmpty(a : IntLikeSet[I, T]) = a.isEmpty
       def min(a : IntLikeSet[I, T]) = a.min
       def max(a : IntLikeSet[I, T]) = a.max
       def invert(a : IntLikeSet[I, T]) = !a
+      def getPosNeg(a : IntLikeSet[I, T]) = a.getNegPos
   }
   implicit val arbitraryConstrainable : Arbitrary[Constraint] = Arbitrary {
     def step(size : Int) = {/*println("step(" + size + ")");*/ size - 10}
     val genId = for(x <- Arbitrary.arbitrary[Int]) yield if(x == Int.MinValue) 1 else (x.abs % Int.MaxValue) + 1
     val genLT = for(id1 <- genId; id2 <- genId) yield LT(id1, id2)
     val genGT = for(id1 <- genId; id2 <- genId) yield GT(id1, id2)
+    val genULT = for(id1 <- genId; id2 <- genId) yield ULT(id1, id2)
+    val genUGT = for(id1 <- genId; id2 <- genId) yield UGT(id1, id2)
     val genLTE = for(id1 <- genId; id2 <- genId) yield LTE(id1, id2)
     val genGTE = for(id1 <- genId; id2 <- genId) yield GTE(id1, id2)
+    val genULTE = for(id1 <- genId; id2 <- genId) yield ULTE(id1, id2)
+    val genUGTE = for(id1 <- genId; id2 <- genId) yield UGTE(id1, id2)
     val genEquals = for(id1 <- genId; id2 <- genId) yield Equals(id1, id2)
     val genNEquals = for(id1 <- genId; id2 <- genId) yield NEquals(id1, id2)
-    val genSimpleConstraint = Gen.oneOf(genLT, genGT, genLTE, genGTE, genEquals, genNEquals)
+    val genSimpleConstraint = Gen.oneOf(genLT, genGT, genULT, genUGT, genLTE, genGTE, genULTE, genUGTE, genEquals, genNEquals)
     
     def genConnective(size : Int) : Gen[Constraint] = if(size <= 0) genSimpleConstraint else Gen.frequency((1, genSimpleConstraint), (2, genAnd(step(size))), (2, genOr(step(size))), (2, genNot(step(size))))
 
@@ -101,6 +109,27 @@ sealed trait Constraint {
       case (GTE(left, right), x) => buildAllValid(LTE(right, left), x)
       case (LT(left, right), x) => stateInvert(buildAllValid(GTE(left, right), !x))
       case (GT(left, right), x) => buildAllValid(LT(right, left), x)
+      case (ULTE(left, right), false) => {
+        val lval = table(left)
+        val rval = table(right)
+        val lWitness = const.min(lval)
+        val rWitness = const.min(rval)
+        val (lNeg, lPos) = const.getPosNeg(lval)
+        val (rNeg, rPos) = const.getPosNeg(rval)
+        val lValid = if(const.isEmpty(rNeg))
+            const.range(dBounded.dMinNotNeg(lWitness), const.max(rPos) min dBounded.dMaxBound(lWitness))
+          else
+            const.union(const.range(dBounded.dMinNotNeg(lWitness), dBounded.dMaxBound(lWitness)), const.range(const.min(rNeg) max dBounded.dMinBound(lWitness), dBounded.dMaxNeg(lWitness)))
+        val rValid = if(const.isEmpty(lPos))
+            const.range(dBounded.dMinBound(rWitness), const.max(lNeg) max dBounded.dMinBound(rWitness))
+          else
+            const.union(const.range(dBounded.dMinBound(rWitness), dBounded.dMaxNeg(rWitness)), const.range(const.min(lPos) max dBounded.dMinNotNeg(rWitness), dBounded.dMaxBound(rWitness)))
+        allFull + ((left, lValid)) + ((right, rValid))
+      }
+      case (ULTE(left, right), true) => ???
+      case (UGTE(left, right), x) => ???
+      case (ULT(left, right), x) => ???
+      case (UGT(left, right), x) => ???
       case (Equals(left, right), false) => {
         val res = const.intersect(table(left), table(right))
         allFull + ((left, res)) + ((right, res))
@@ -136,6 +165,10 @@ final case class LT(left : Int, right : Int) extends Constraint
 final case class GT(left : Int, right : Int) extends Constraint
 final case class LTE(left : Int, right : Int) extends Constraint
 final case class GTE(left : Int, right : Int) extends Constraint
+final case class ULT(left : Int, right : Int) extends Constraint
+final case class UGT(left : Int, right : Int) extends Constraint
+final case class ULTE(left : Int, right : Int) extends Constraint
+final case class UGTE(left : Int, right : Int) extends Constraint
 final case class Equals(left : Int, right : Int) extends Constraint
 final case class NEquals(left : Int, right : Int) extends Constraint
 final case class Not(op : Constraint) extends Constraint
