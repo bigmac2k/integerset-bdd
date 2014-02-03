@@ -55,6 +55,15 @@ object Constraint {
     
     Gen.sized(genConnective)
   }
+  def createEq(left : Int, right : Int) : Constraint = Equals(left, right)
+  def createNEq(left : Int, right : Int) : Constraint = NEquals(left, right)
+  def createLt(left : Int, right : Int) : Constraint = LT(left, right)
+  def createLte(left : Int, right : Int) : Constraint = LTE(left, right)
+  def createGt(left : Int, right : Int) : Constraint = GT(left, right)
+  def createGte(left : Int, right : Int) : Constraint = GTE(left, right) 
+  def createNot(constraint : Constraint) : Constraint = Not(constraint)
+  def createAnd(left : Constraint, right : Constraint) : Constraint = And(left, right)
+  def createOr(left : Constraint, right : Constraint) : Constraint = Or(left, right)
 }
 
 sealed trait Constraint {
@@ -71,6 +80,22 @@ sealed trait Constraint {
       case Or(l, r) => helper(helper(iSet, r), l)
     }
     helper(Set[Int](), this)
+  }
+  def solveJLong[T](table : java.util.HashMap[Integer, IntLikeSet[java.lang.Long, T]])(implicit dBounded : DynBounded[T], dBoundedBits : DynBoundedBits[T], ord : Ordering[T], castTI : Castable[T, cc.sven.misc.Pair[Integer, java.lang.Long]], castIT : Castable[cc.sven.misc.Pair[Integer, java.lang.Long], T]) : java.util.HashMap[Integer, IntLikeSet[java.lang.Long, T]] = {
+    import cc.sven.integral.Implicits._
+    import scala.collection.JavaConverters._
+    implicit val castTI_ = new Castable[T, (Int, java.lang.Long)]{
+      def apply(t : T) = {
+        val i = castTI(t)
+        (i._1, i._2)
+      }
+    }
+    implicit val castIT_ = new Castable[(Int, java.lang.Long), T]{
+      def apply(i : (Int, java.lang.Long)) = castIT(cc.sven.misc.Pair(i._1, i._2))
+    }
+    implicit val constrainable = Constraint.intLikeSetIsConstrainable[java.lang.Long, T]
+    val res = solve[T,({type x[a]=IntLikeSet[java.lang.Long, a]})#x](HashMap(table.asScala.toStream.map(x => (x._1 : Int, x._2)) : _*))
+    new java.util.HashMap(res.map(x => (x._1 : Integer, x._2)).asJava)
   }
   def solve[T, S[_]](table : HashMap[Int, S[T]])(implicit dBounded : DynBounded[T], ord : Ordering[T], const : Constrainable[T, S]) : HashMap[Int, S[T]] = {
     import ord.mkOrderingOps
