@@ -61,6 +61,8 @@ object Constraint {
   def createLte(left : Int, right : Int) : Constraint = LTE(left, right)
   def createGt(left : Int, right : Int) : Constraint = GT(left, right)
   def createGte(left : Int, right : Int) : Constraint = GTE(left, right) 
+  def createULt(left : Int, right : Int) : Constraint = ULT(left, right)
+  def createULte(left : Int, right : Int) : Constraint = ULTE(left, right)
   def createNot(constraint : Constraint) : Constraint = Not(constraint)
   def createAnd(left : Constraint, right : Constraint) : Constraint = And(left, right)
   def createOr(left : Constraint, right : Constraint) : Constraint = Or(left, right)
@@ -73,6 +75,10 @@ sealed trait Constraint {
       case GT(l, r) => iSet + l + r
       case LTE(l, r) => iSet + l + r
       case GTE(l, r) => iSet + l + r
+      case ULT(l, r) => iSet + l + r
+      case UGT(l, r) => iSet + l + r
+      case ULTE(l, r) => iSet + l + r
+      case UGTE(l, r) => iSet + l + r
       case Equals(l, r) => iSet + l + r
       case NEquals(l, r) => iSet + l + r
       case Not(op) => helper(iSet, op)
@@ -139,8 +145,12 @@ sealed trait Constraint {
         val rval = table(right)
         val lWitness = const.min(lval)
         val rWitness = const.min(rval)
+        //to relax safeguards - might be removed.
+        require(dBounded.dMinBound(lWitness) == dBounded.dMinBound(rWitness))
+        require(dBounded.dMaxBound(lWitness) == dBounded.dMaxBound(rWitness))
         val (lNeg, lPos) = const.getPosNeg(lval)
         val (rNeg, rPos) = const.getPosNeg(rval)
+        //Check max dBounded safeguards - what if negative of one is more still pos in other?
         val lValid = if(const.isEmpty(rNeg))
             const.range(dBounded.dMinNotNeg(lWitness), const.max(rPos) min dBounded.dMaxBound(lWitness))
           else
@@ -151,10 +161,29 @@ sealed trait Constraint {
             const.union(const.range(dBounded.dMinBound(rWitness), dBounded.dMaxNeg(rWitness)), const.range(const.min(lPos) max dBounded.dMinNotNeg(rWitness), dBounded.dMaxBound(rWitness)))
         allFull + ((left, lValid)) + ((right, rValid))
       }
-      case (ULTE(left, right), true) => ???
-      case (UGTE(left, right), x) => ???
-      case (ULT(left, right), x) => ???
-      case (UGT(left, right), x) => ???
+      case (ULTE(left, right), true) => {
+        val lval = table(left)
+        val rval = table(right)
+        val lWitness = const.min(lval)
+        val rWitness = const.min(rval)
+        //to relax safeguards - might be removed.
+        require(dBounded.dMinBound(lWitness) == dBounded.dMinBound(rWitness))
+        require(dBounded.dMaxBound(lWitness) == dBounded.dMaxBound(rWitness))
+        val (lNeg, lPos) = const.getPosNeg(lval)
+        val (rNeg, rPos) = const.getPosNeg(rval)
+        val lValid = if(const.isEmpty(rPos))
+            const.union(const.range(dBounded.dMinNotNeg(lWitness), dBounded.dMaxBound(lWitness)), const.range(const.min(rNeg), dBounded.dMaxNeg(lWitness)))
+          else
+            const.range(dBounded.dMinNotNeg(lWitness), const.min(rPos))
+        val rValid = if(const.isEmpty(lNeg))
+            const.union(const.range(dBounded.dMinBound(rWitness), dBounded.dMinNotNeg(rWitness)), const.range(const.max(lPos), dBounded.dMaxBound(rWitness)))
+          else
+            const.range(dBounded.dMinBound(rWitness), const.min(lNeg))
+        allEmpty + ((left, lValid)) + ((right, rValid))
+      }
+      case (UGTE(left, right), x) => buildAllValid(ULTE(right, left), x)
+      case (ULT(left, right), x) => stateInvert(buildAllValid(UGTE(left, right), !x))
+      case (UGT(left, right), x) => buildAllValid(ULT(right, left), x)
       case (Equals(left, right), false) => {
         val res = const.intersect(table(left), table(right))
         allFull + ((left, res)) + ((right, res))
