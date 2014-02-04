@@ -401,6 +401,7 @@ object IntLikeSet {
     import int.mkOrderingOps
     def isBitNeg(i : I) = IntSet.toBitVector(i).drop(boundedBits.bits - bits_).head
     (isBitNeg(lo), isBitNeg(hi)) match {
+      case (false, true) if bits_ == 1 => range(bits_, hi, lo) //Cludge for booleans, order is reversed there in jakstab :(
       case (false, true) => throw new IllegalArgumentException
       case (true, false) if lo < int.zero => new IntLikeSet[I, T](bits_, IntSet[I](FilledIval(lo, hi)))
       case (true, false) => {
