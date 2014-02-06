@@ -280,7 +280,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val b_ = (IntLikeSet[Long, NBitLong](bits_) /: bBounded)((acc, x) => acc + NBitLong(bits_, x))
       val ref = cartesianProduct(aBounded, bBounded).map((x) => x._1 * x._2)
       //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
-      val us = a_.mul(depths_)(b_)
+      val us = a_.mul(10 , depths_)(b_)
       val castIT = implicitly[Castable[(Int, Long), NBitLong]]
       val ref_ = ref.map((x : Long) => castIT((bits_ * 2, x)))
       val res = ref_.forall(us.contains)

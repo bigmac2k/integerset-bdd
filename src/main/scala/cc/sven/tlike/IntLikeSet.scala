@@ -201,11 +201,12 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
    * bitWidth. Furthermore, original implementation computes on long
    * and ignores overflow - we do the same...
    */
-  def mul(depths : Int)(that : IntLikeSet[I, T]) = {
+  def mul(elems : Int, depths_ : Int)(that : IntLikeSet[I, T]) = {
     import int.{ mkNumericOps, mkOrderingOps }
     import cc.sven.interval.Interval._
     val ivalInt = implicitly[Arith[Interval[I]]]
     import ivalInt.mkArithOps
+    val depths = if(sizeGreaterThan(elems) || that.sizeGreaterThan(elems)) depths_ else bits
     checkBitWidth(this, that)
     val ivalSet1 = toIvalSetI(depths)
     val ivalSet2 = that.toIvalSetI(depths)
