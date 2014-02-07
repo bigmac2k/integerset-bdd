@@ -91,6 +91,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     helper(this, Nil).reverse
   }
   def doesImply(that: CBDD): Boolean = (this, that) match {
+    case (a, b) if a == b                       => true
     case (Node(set1, uset1), Node(set2, uset2)) => set1.doesImply(set2) && uset1.doesImply(uset2)
     case (False, False)                         => true
     case (True, True)                           => true
@@ -118,6 +119,10 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   def replaceWith(toReplace : CBDD, toReplaceWith : CBDD) : CBDD = if(this == toReplace) toReplaceWith else this match {
     case True => True
     case False => False
+    case Node(set, uset) if set == uset => {
+      val sub = set.replaceWith(toReplace, toReplaceWith)
+      Node(sub, sub)
+    }
     case Node(set, uset) => Node(set.replaceWith(toReplace, toReplaceWith), uset.replaceWith(toReplace, toReplaceWith))
   }
   override def toString = bdd.toString(compl)
