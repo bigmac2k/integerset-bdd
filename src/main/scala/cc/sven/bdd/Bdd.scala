@@ -290,6 +290,10 @@ object CBDD {
   def bNot(op1: CBDD): CBDD = op1 match {
     case False           => False
     case True            => True
+    case Node(set, uset) if set == uset => {
+      val not = bNot(set)
+      Node(not, not)
+    }
     case Node(set, uset) => Node(bNot(uset), bNot(set))
   }
 }
