@@ -18,11 +18,19 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   def unary_! = new CBDD(bdd, !compl)
   private[this] def ite_raw( /*depth : Int,*/ triple: (CBDD, CBDD, CBDD), f: ( /*Int,*/ (CBDD, CBDD, CBDD)) => CBDD): CBDD =
     triple match {
-      case (_, t, e) if t == e => t
-      case (True, t, _)        => t
-      case (False, _, e)       => e
-      case (i, True, False)    => i
-      case (i, False, True)    => !i
+      case (_, t, e) if t == e     => t
+      case (True, t, _)            => t
+      case (False, _, e)           => e
+      case (i, True, False)        => i
+      case (i, False, True)        => !i
+      case (i, True, e) if i == e  => i
+      case (i, False, e) if i == e => False
+      case (i, True, e) if i == !e => True
+      case (i, False, e) if i == !e => !i
+      case (i, t, False) if i == t => i
+      case (i, t, True) if i == t  => True
+      case (i, t, False) if i == !t => False
+      case (i, t, True) if i == !t => !i
       case (Node(iset, iuset), t, e) => {
           def extract(cbdd: CBDD) = cbdd match {
             case True            => (True, True)
