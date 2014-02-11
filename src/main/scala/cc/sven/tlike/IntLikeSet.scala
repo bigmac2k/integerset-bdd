@@ -190,8 +190,12 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   }
   def toIvalSetPrecise : Set[Interval[I]] = this.map{
     x =>
-      val v = castTI(x)
-      FilledIval(v._2, v._2)
+      val (b, v) = castTI(x)
+      val bits_ = boundedBits.bits - b
+      val v_ = IntSet.toBitVector(v).drop(bits_)
+      val v__ = if(v_.head) List.fill(bits_)(true) ++ v_ else List.fill(bits_)(false) ++ v_
+      val v___ = IntSet.fromBitVector(v__)
+      FilledIval(v___, v___)
   }
   def getNegPos = getBWCBDD match {
     case Node(set, uset) => (fromBWCBDD(Node(set, False)), fromBWCBDD(Node(False, uset)))
@@ -215,8 +219,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val depths = if(sizeGreaterThan(elems) || that.sizeGreaterThan(elems)) depths_ else bits
     val ivalSet1 = if(depths == bits) toIvalSetPrecise else toIvalSetI(depths)
     val ivalSet2 = if(depths == bits) that.toIvalSetPrecise else that.toIvalSetI(depths)
-    println("ivalSet1: " + ivalSet1)
-    println("ivalSet2: " + ivalSet2)
+    /*println("ivalSet1: " + ivalSet1)
+    println("ivalSet2: " + ivalSet2)*/
     val bits_ = bits * 2
     assert(bits_ <= implicitly[BoundedBits[I]].bits)
     val ivalRes = for{
