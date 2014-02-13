@@ -291,9 +291,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val toFill = bits - toTake
     def takeFkt(cbdd : CBDD) : CBDD = cbdd.take(toTake)
     def reduceFkt(a : CBDD, b : CBDD) = a || b
-    val nCBDD = CBDD(List.fill(toFill)(false), False, False, set.cbdd.drop(toDrop, False, takeFkt, reduceFkt))
-    val iSet = new IntSet[I](nCBDD)
-    new IntLikeSet[I, T](toTake, iSet)
+    val iSet = fromBWCBDD(CBDD(List.fill(toFill)(false), False, False, getBWCBDD.drop(toDrop, False, takeFkt, reduceFkt)))
+    new IntLikeSet[I, T](toTake, iSet.set)
   }
   def signExtend(from : Int, to : Int) : IntLikeSet[I, T] = {
     require(from >= to && to >= 0)
