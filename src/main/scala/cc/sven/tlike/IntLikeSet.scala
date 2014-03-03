@@ -151,6 +151,17 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     require(steps >= 0)
     fromBWCBDD(CBDD.bAnd(getBWCBDD.dropOr(steps min bits), CBDD( List.fill(bits - steps)(true) ++ List.fill(steps min bits)(false) )))
   }
+  def bRor(steps : Int) = {
+    require(steps >= 0)
+    val steps_ = steps % bits
+    val bdd = getBWCBDD
+    val upper = CBDD.bAnd(bdd.dropOr(bits - steps_), CBDD(List.fill(steps_)(true) ++ List.fill(bits - steps_)(false)))
+    val lower = CBDD(List.fill(steps_)(false), False, False, bdd.take(bits - steps_))
+    //println(upper.truePaths.force, lower.truePaths.force, (CBDD.bOr(upper, lower)).truePaths.force)
+    //println(fromBWCBDD(CBDD.bOr(upper, lower)).set.cbdd.truePaths.force)
+    fromBWCBDD(CBDD.bOr(upper, lower))
+  }
+  def bRol(steps : Int) = bRor(bits - steps)
   def bSar(steps : Int) = {
     require(steps >= 0)
     val bdd = getBWCBDD
