@@ -1,7 +1,7 @@
 package cc.sven.tlike
 
 import cc.sven.bounded._
-import org.scalacheck.Arbitrary
+//import org.scalacheck.Arbitrary
 
 class NBitLong(val bits : Int, private val value : Long) {
   import scala.math.BigInt.int2bigInt
@@ -99,7 +99,7 @@ object NBitLong {
   }
   implicit object NBitLongIsNBitLongCastable extends Castable[(Int, Long), NBitLong] {
     def apply(x : (Int, Long)) : NBitLong = new NBitLong(x._1, x._2)
-  }
+  }/*
   implicit val arbitraryNBitLong : Arbitrary[NBitLong] = Arbitrary {
     for{
       long <- Arbitrary.arbitrary[Long]
@@ -109,5 +109,5 @@ object NBitLong {
   }
   def arbitraryNBitLong(bits : Int) : Arbitrary[NBitLong] = Arbitrary {
     for(long <- Arbitrary.arbitrary[Long]) yield NBitLong(bits, bound(long, bits))
-  }
+  }*/
 }

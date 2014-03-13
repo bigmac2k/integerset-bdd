@@ -4,8 +4,8 @@ import cc.sven.bounded._
 import scala.collection.immutable.HashMap
 import scala.collection.immutable.Set
 import cc.sven.tlike._
-import org.scalacheck.Arbitrary
-import org.scalacheck.Gen
+//import org.scalacheck.Arbitrary
+//import org.scalacheck.Gen
 
 trait Constrainable[T, S[_]] {
   def range(lo : T, hi : T) : S[T]
@@ -32,7 +32,7 @@ object Constraint {
       def invert(a : IntLikeSet[I, T]) = !a
       def getPosNeg(a : IntLikeSet[I, T]) = a.getNegPos
   }
-  implicit val arbitraryConstrainable : Arbitrary[Constraint] = Arbitrary {
+ /* implicit val arbitraryConstrainable : Arbitrary[Constraint] = Arbitrary {
     def step(size : Int) = {/*println("step(" + size + ")");*/ size - 10}
     val genId = for(x <- Arbitrary.arbitrary[Int]) yield if(x == Int.MinValue) 1 else (x.abs % Int.MaxValue) + 1
     val genLT = for(id1 <- genId; id2 <- genId) yield LT(id1, id2)
@@ -54,7 +54,7 @@ object Constraint {
     def genNot(size : Int) = for(op <- genConnective(step(size))) yield Not(op)
     
     Gen.sized(genConnective)
-  }
+  }*/
   def createEq(left : Int, right : Int) : Constraint = Equals(left, right)
   def createNEq(left : Int, right : Int) : Constraint = NEquals(left, right)
   def createLt(left : Int, right : Int) : Constraint = LT(left, right)

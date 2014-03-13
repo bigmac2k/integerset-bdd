@@ -374,6 +374,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)(_ + _)
       set_.min == set__.min
   }
+  /* depends on scalacheck - uncommented for release
   property("constraint tautology") = forAll{
     (sets : List[(Boolean, Boolean, Int, Long, Set[Long])], bits : Int) => sets match {
       case List() => true
@@ -471,7 +472,7 @@ object IntSetSpecification extends Properties("IntSet") {
         val check = constraint.solve[NBitLong, ({type x[a]=IntLikeSet[Long, a]})#x](concrete)
         check.exists{case (_, v) => v.isEmpty}
       }
-  }
+  }*/
   property("getNegPos splits correctly") = forAll{
     (set : Set[Long], bits : Int) =>
       val bits_ = NBitLong.boundBits(bits)
