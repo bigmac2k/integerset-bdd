@@ -182,6 +182,8 @@ object CBDD {
       val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
       (True, ov)
     }
+    //XXX Sven: This should be a base case. True is an interval including all numbers of Node.
+    //Therefore, only the largest and smallest element of Node are interesting as smallest + ival cup largst + ival covers all others.
     case (Node(set, uset), True) => {
       val tt = plus(set, True, depth - 1)
       val tf = tt

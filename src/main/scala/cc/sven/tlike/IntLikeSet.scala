@@ -285,6 +285,15 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
      case (acc, FilledIval(lo, hi)) => acc union IntLikeSet.range[I, T](bits_ min boundedBits.bits, lo, hi).changeBitWidth(bits_)
    }
   }
+  def mulSingleton(op : T) : IntLikeSet[I, T] = {
+    val (opBits, opI) = castTI(op)
+    assert(opBits == bits)
+    val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
+    //only positive for now...
+    require(!opBools.head)
+    
+    ???
+  }
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
       case _ if depth == 0 => true
