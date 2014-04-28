@@ -398,6 +398,7 @@ final class Node(val set: BDD, val uset: BDD, val compl: Boolean, val tag: Int) 
   }
 }
 object Node {
+  //this is potentially terrible. Values make keys strongly referenced?
   private[this] val cache = WeakHashMap.empty[BDD, BDD]
   private[this] var tagCounter: Int = 1
   def status(): String = "Items in cache: " + cache.size.toString
