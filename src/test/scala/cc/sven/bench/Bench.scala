@@ -3,7 +3,7 @@ package cc.sven.bench
 import cc.sven.intset._
 import cc.sven.misc.Misc._
 
-object Bench extends testing.Benchmark {
+/*object Bench extends testing.Benchmark {
   println("building data")
   def generateData(num : Int) = {
     var i = 0
@@ -30,4 +30,4 @@ object Bench extends testing.Benchmark {
     val res = data plus data
     println("Intset size: " + res.sizeBigInt)
   }
-}
+}*/
