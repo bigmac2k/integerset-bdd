@@ -2,6 +2,7 @@ package cc.sven.bdd
 
 import cc.sven.memoized._
 import scala.collection.mutable.WeakHashMap
+import scala.ref._
 /*
 import scala.concurrent._
 import scala.concurrent.duration.Duration.Inf
@@ -399,7 +400,7 @@ final class Node(val set: BDD, val uset: BDD, val compl: Boolean, val tag: Int) 
 }
 object Node {
   //this is potentially terrible. Values make keys strongly referenced?
-  private[this] val cache = WeakHashMap.empty[BDD, BDD]
+  private[this] val cache = WeakHashMap.empty[BDD, WeakReference[BDD]]
   private[this] var tagCounter: Int = 1
   def status(): String = "Items in cache: " + cache.size.toString
   def apply(set: CBDD, uset: CBDD) = {
@@ -407,7 +408,7 @@ object Node {
     if (set.compl == uset.compl && set.bdd == Terminal && uset.bdd == Terminal) new CBDD(Terminal, ibit) else {
       val usetbit = set.compl != uset.compl
       val tentative = new Node(set.bdd, uset.bdd, usetbit, tagCounter)
-      val hashconsed = cache.getOrElseUpdate(tentative, tentative)
+      val hashconsed = cache.getOrElseUpdate(tentative, WeakReference(tentative)).get.getOrElse(tentative)
       if (tentative eq hashconsed) tagCounter += 1;
       new CBDD(hashconsed, ibit)
     }
