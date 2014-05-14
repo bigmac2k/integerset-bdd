@@ -136,7 +136,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   }
   override def toString = bdd.toString(compl)
   override def equals(that: Any) = that match {
-    case t: CBDD => compl == t.compl && bdd == t.bdd
+    case t: CBDD => compl == t.compl && (bdd eq t.bdd)
     case _       => false
   }
   override def hashCode = (bdd.hashCode, compl).hashCode
