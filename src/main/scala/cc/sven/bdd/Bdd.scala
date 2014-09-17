@@ -176,6 +176,16 @@ object CBDD {
     val falseOV = union3(tt._1, tf._2, ft._2)
     (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
   }
+  private def pred(integer : List[Boolean]) : List[Boolean] = {
+    def helper(bs : List[Boolean]) : (Boolean, List[Boolean]) = bs match {
+      case List(x) => (x, List(!x))
+      case b :: bs => {
+        val (flipped, rec) = helper(bs)
+        (b, (b == flipped) :: rec)
+      }
+    }
+    helper(integer)._2
+  }
   def plus(op1: CBDD, op2: CBDD, depth: Int): CBDDTuple = (op1, op2) match {
     case (False, _) => (False, False)
     case (x, False) => plus(False, x, depth)
@@ -183,15 +193,22 @@ object CBDD {
       val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
       (True, ov)
     }
-    //XXX Sven: This should be a base case. True is an interval including all numbers of Node.
-    //Therefore, only the largest and smallest element of Node are interesting as smallest + ival cup largst + ival covers all others.
-    case (Node(set, uset), True) => {
-      val tt = plus(set, True, depth - 1)
-      val tf = tt
-      val ff = plus(uset, True, depth - 1)
-      val ft = ff
-      addMerge(ff, ft, tf, tt)
+    case (n@Node(set, uset), True) => {
+      val lo = n.falseMost.get.padTo(depth, false)
+      val hi = n.trueMost.get.padTo(depth,true)
+      val noOv = CBDD(lo, List.fill(depth)(true))
+      val ov = if(lo.forall(!_)) False else CBDD(List.fill(depth)(false), pred(hi))
+      (noOv, ov)
     }
+    /* less efficient version
+     *case (Node(set, uset), True) => {
+     *  val tt = plus(set, True, depth - 1)
+     *  val tf = tt
+     *  val ff = plus(uset, True, depth - 1)
+     *  val ft = ff
+     *  addMerge(ff, ft, tf, tt)
+     *}
+     */
     case (True, x) => plus(x, True, depth)
     case (Node(set1, uset1), Node(set2, uset2)) => {
       /*optimization:
