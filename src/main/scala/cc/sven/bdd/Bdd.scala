@@ -1,6 +1,5 @@
 package cc.sven.bdd
 
-import cc.sven.memoized._
 import scala.collection.mutable.WeakHashMap
 import scala.ref._
 /*
