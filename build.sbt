@@ -10,3 +10,5 @@ resolvers ++= Seq(
 )
 
 libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.4" % "test"
+
+parallelExecution in Test := false
