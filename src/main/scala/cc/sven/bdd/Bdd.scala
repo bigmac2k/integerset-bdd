@@ -9,6 +9,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 */
 
 sealed abstract trait BDD {
+  val depth: Int
+  val count: Long
   val tag: Int
   val compl: Boolean
   def toString(c: Boolean): String
@@ -16,6 +18,8 @@ sealed abstract trait BDD {
 
 class CBDD(val bdd: BDD, val compl: Boolean) {
   def unary_! = new CBDD(bdd, !compl)
+  def depth = bdd.depth
+  def count = if(compl) (1l << bdd.depth) - bdd.count else bdd.count
   private[this] def ite_raw( /*depth : Int,*/ triple: (CBDD, CBDD, CBDD), f: ( /*Int,*/ (CBDD, CBDD, CBDD)) => CBDD): CBDD =
     triple match {
       case (_, t, e) if t == e     => t
@@ -393,7 +397,9 @@ class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
 }
 
 object Terminal extends BDD {
+  val depth = 0
   val tag: Int = 0
+  val count: Long = 1
   val compl: Boolean = false
   def toString(c: Boolean) = if (c) "False" else "True"
   override def hashCode = tag
@@ -407,6 +413,18 @@ object False extends CBDD(Terminal, true) {
 }
 
 final class Node(val set: BDD, val uset: BDD, val compl: Boolean, val tag: Int) extends BDD {
+  val depth = scala.math.max(set.depth, uset.depth) + 1
+  private def countR: Long = uset match {
+    case Terminal if(compl) => 0
+    case Terminal => 1
+    case _ => if(compl) (1l << uset.depth) - uset.count else uset.count
+  }
+  
+  private def countL: Long = set.count 
+  val count = if (uset.depth > set.depth)
+      (1l << (uset.depth - set.depth)) * countL + countR
+    else
+      (1l << (set.depth - uset.depth)) * countR + countL
   def toString(c: Boolean) = "Node(" + set.toString(c) + ", " + uset.toString(c != compl) + ", " + tag.toString + ")"
   override def hashCode = (set.tag, uset.tag, compl).hashCode
   override def equals(that: Any) = that match {

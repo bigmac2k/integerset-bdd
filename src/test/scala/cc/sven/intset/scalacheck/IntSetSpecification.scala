@@ -26,6 +26,11 @@ object IntSetSpecification extends Properties("IntSet") {
       val b = IntSet(a)
       a.size == b.size
   }
+  property("set SAT-count") = forAll{
+    (a : Set[Int]) =>
+      val b = IntSet(a)
+      a.size == b.cbdd.count 
+  }
   property("set added is included") = forAll{
     (a : Set[Int], b : Int) =>
       val c = IntSet(a)

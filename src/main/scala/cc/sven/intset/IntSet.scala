@@ -57,7 +57,8 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
   }
   def sizeBigInt: BigInt = {
     import scala.math.BigInt._
-    cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
+    if(cbdd.depth < boundedBits.bits) (2 pow (boundedBits.bits - cbdd.depth)) * cbdd.count
+    else cbdd.count
   }
   override def size : Int = {
     val bint = sizeBigInt
