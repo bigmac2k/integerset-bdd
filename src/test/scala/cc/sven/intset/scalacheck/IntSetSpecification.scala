@@ -2,34 +2,39 @@ package cc.sven.intset.scalacheck
 
 import org.scalacheck.Properties
 import org.scalacheck.Prop.forAll
+import org.scalacheck.Test.Parameters
 import cc.sven.intset._
 import cc.sven.bounded._
 import cc.sven.integral._
 import cc.sven.intset.IntSet
 import scala.sys.BooleanProp
-import cc.sven.misc.Misc._
 import cc.sven.tlike._
 import cc.sven.constraint._
 import scala.collection.immutable.HashMap
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
+import cc.sven.misc._
+import cc.sven.testmisc._
 
 object IntSetSpecification extends Properties("IntSet") {
+  override def main(args : Array[String]): Unit = {
+    this.check(Parameters.default.withMinSuccessfulTests(1000))
+  }
   property("bitVector identity[Int]") = forAll((a: Int) => IntSet.fromBitVector[Int](IntSet.toBitVector(a)) == a)
   property("set eq IntSet[Int]") = forAll{
     (a : Set[Int]) =>
       val b = IntSet(a)
       a.forall(b.contains(_)) && b.forall(a.contains(_))
   }
-  property("set cardinality") = forAll{
-    (a : Set[Int]) =>
+  property("intSet cardinality") = forAll{
+    (a : Set[Long]) =>
       val b = IntSet(a)
       a.size == b.size
   }
-  property("set SAT-count") = forAll{
-    (a : Set[Int]) =>
-      val b = IntSet(a)
-      a.size == b.cbdd.count 
+  property("intLikeSet cardinality") = forAll{
+    (a : Set[Long]) =>
+      val b = IntLikeSet[Long, Long](a)
+      a.size == b.size
   }
   property("set added is included") = forAll{
     (a : Set[Int], b : Int) =>
@@ -379,7 +384,7 @@ object IntSetSpecification extends Properties("IntSet") {
       val set__ = (IntLikeSet[Long, NBitLong](bits_) /: set_)(_ + _)
       set_.min == set__.min
   }
-  /* depends on scalacheck - uncommented for release
+  /* depends on scalacheck - comment for release*/
   property("constraint tautology") = forAll{
     (sets : List[(Boolean, Boolean, Int, Long, Set[Long])], bits : Int) => sets match {
       case List() => true
@@ -445,10 +450,10 @@ object IntSetSpecification extends Properties("IntSet") {
     for{
       constraint <- Arbitrary.arbitrary[Constraint]
       bits <- Arbitrary.arbitrary[Int]
-      val bits_ = NBitLong.boundBits(bits)
+      bits_ = NBitLong.boundBits(bits)
       assocLst <- sequence(constraint.getVarIds.toList.map(id => for(x <- Arbitrary.arbitrary[Set[Long]]) yield (id, (Set[Long](bits) /: x)(_ + _))))
-      val assocLst_ = assocLst.map{case (id, set) => (id, (IntLikeSet[Long, NBitLong](bits_) /: set)((acc, x) => acc + NBitLong(bits_, NBitLong.bound(x, bits_))))}
-      val hashMap = HashMap[Int, IntLikeSet[Long, NBitLong]](assocLst_.toSeq : _*)
+      assocLst_ = assocLst.map{case (id, set) => (id, (IntLikeSet[Long, NBitLong](bits_) /: set)((acc, x) => acc + NBitLong(bits_, NBitLong.bound(x, bits_))))}
+      hashMap = HashMap[Int, IntLikeSet[Long, NBitLong]](assocLst_.toSeq : _*)
     } yield (bits_, hashMap, constraint)
   }
   property("constraint x `and` _: x unaffected") = forAll{
@@ -477,7 +482,7 @@ object IntSetSpecification extends Properties("IntSet") {
         val check = constraint.solve[NBitLong, ({type x[a]=IntLikeSet[Long, a]})#x](concrete)
         check.exists{case (_, v) => v.isEmpty}
       }
-  }*/
+  }
   property("getNegPos splits correctly") = forAll{
     (set : Set[Long], bits : Int) =>
       val bits_ = NBitLong.boundBits(bits)
