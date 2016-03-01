@@ -2,6 +2,7 @@ package cc.sven.bdd
 
 import scala.collection.mutable.WeakHashMap
 import scala.ref._
+import cc.sven.misc.unsignedLongToBigInt
 /*
 import scala.concurrent._
 import scala.concurrent.duration.Duration.Inf
@@ -11,6 +12,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 sealed abstract trait BDD {
   val depth: Int
   val count: Long
+  val nodecount : Long
   val tag: Int
   val compl: Boolean
   def toString(c: Boolean): String
@@ -31,6 +33,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     else
       bdd.count
   }
+  def nodecount = bdd.nodecount
   private[this] def ite_raw( /*depth : Int,*/ triple: (CBDD, CBDD, CBDD), f: ( /*Int,*/ (CBDD, CBDD, CBDD)) => CBDD): CBDD =
     triple match {
       case (_, t, e) if t == e     => t
@@ -411,6 +414,7 @@ object Terminal extends BDD {
   val depth: Int = 0
   val tag: Int = 0
   val count: Long = 1
+  val nodecount: Long = 1
   val compl: Boolean = false
   def toString(c: Boolean) = if (c) "False(" + tag + ", " + depth + ", " + 0 + ")" else "True(" + tag + ", " + depth + ", " + 1 + ")"
   override def hashCode = tag
@@ -443,12 +447,24 @@ final class Node(val set: BDD, val uset: BDD, val compl: Boolean, val tag: Int) 
     case t: Node => compl == t.compl && (set eq t.set) && (uset eq t.uset)
     case _       => false
   }
+  val nodecount = {
+    val res = set.nodecount + uset.nodecount
+    //-1 indicates that overflow happend over 0 (overflow in unsigned long)
+    if(set.nodecount >= 0 && uset.nodecount >= 0 || res < 0) res else -1
+  }
 }
 object Node {
   //this is potentially terrible. Values make keys strongly referenced?
   private[this] val cache = WeakHashMap.empty[BDD, WeakReference[BDD]]
   private[this] var tagCounter: Int = 1
-  def status(): String = "Items in cache: " + cache.size.toString
+  def cacheSize() = cache.size
+  def nodeCount() = ((0 : BigInt, false) /: cache.toList){ case ((n, huge), (bdd, _)) =>
+    if(bdd.nodecount == -1) (n, true) else (unsignedLongToBigInt(bdd.nodecount) + n, huge)
+  }
+  def status(): String = {
+    val nc = nodeCount()
+    "Tag counter: " + tagCounter + "; Items in cache: " + cacheSize() + (if(cacheSize() != 0) "; Nodes in cache: " + nc._1 + "; Average BDD size: " + (nc._1 / cacheSize()) + (if(nc._2) "; There where huge uncounted BDDs" else "") else "")
+  }
   def apply(set: CBDD, uset: CBDD) = {
     val ibit = set.compl
     if (set.compl == uset.compl && set.bdd == Terminal && uset.bdd == Terminal) new CBDD(Terminal, ibit) else {

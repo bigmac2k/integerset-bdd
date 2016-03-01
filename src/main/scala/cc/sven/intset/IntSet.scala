@@ -75,6 +75,7 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     sizeBigInt > value
   }
   def sizeGreaterThan(value : Int) : Boolean = sizeGreaterThan(value : BigInt)
+  def nodeCount : Option[BigInt] = if(cbdd.nodecount == -1) None else Some(unsignedLongToBigInt(cbdd.nodecount))
   def randomElement() = {
     val path = this.cbdd.randomTruePath()
     val path_ = path ++ List.fill(boundedBits.bits - path.length)(scala.util.Random.nextBoolean())

@@ -103,6 +103,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     sizeBigInt > value
   }
   def sizeGreaterThan(value : Int) : Boolean = sizeGreaterThan(value : BigInt)
+  def nodeCount : Option[BigInt] = if(set.cbdd.nodecount == -1) None else Some(unsignedLongToBigInt(set.cbdd.nodecount))
   def randomElement() = castIT((bits, set.randomElement()))
   def subsetOf(that : IntLikeSet[I, T]) = {
     checkBitWidth(this, that)
