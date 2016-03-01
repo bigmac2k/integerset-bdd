@@ -5,6 +5,7 @@ import cc.sven.bdd._
 import cc.sven.intset._
 import cc.sven.bounded._
 import cc.sven.interval._
+import cc.sven.misc.unsignedLongToBigInt
 import scala.collection.JavaConverters._
 
 class BitWidthException(widthA : Int, widthB : Int) extends Exception {
@@ -83,21 +84,23 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
       IntSet.fromBitVector(List.fill(boundedBits.bits - bits)(false) ++ (true :: falseMost))(int, bounded, boundedBits)
     }
   })
-  def sizeBigInt = set.cbdd.truePaths.map((x) => BigInt(1l << (boundedBits.bits - x.length))).sum
+  //def sizeBigInt = set.cbdd.truePaths.map((x) => BigInt(1l << (boundedBits.bits - x.length))).sum
+  def sizeBigInt: BigInt = {
+    import scala.math.BigInt._
+    assert(set.cbdd.depth <= boundedBits.bits)
+    if(set.cbdd.depth > 64) //we use long
+    //could be optimized by only going through cbdd.depth - 64 upper part.
+      set.cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
+    else
+      ((1: BigInt) << (boundedBits.bits - set.cbdd.depth)) * unsignedLongToBigInt(set.cbdd.count)
+  }
   override def size : Int = {
     val bint = sizeBigInt
     if(bint > Integer.MAX_VALUE) throw new IllegalArgumentException("size does not fit into an Int")
     bint.intValue
   }
   def sizeGreaterThan(value : BigInt) : Boolean = {
-    import scala.math.BigInt._
-    require(value >= 0)
-    var size : BigInt = 0
-    for(p <- set.cbdd.truePaths) {
-      size += 2 pow (boundedBits.bits - p.length)
-      if(size > value) return true
-    }
-    return false
+    sizeBigInt > value
   }
   def sizeGreaterThan(value : Int) : Boolean = sizeGreaterThan(value : BigInt)
   def randomElement() = castIT((bits, set.randomElement()))

@@ -9,6 +9,7 @@ import cc.sven.bounded.BoundedBits
 import cc.sven.bounded.Bounded
 import cc.sven.integral.Implicits._
 import cc.sven.interval._
+import cc.sven.misc.unsignedLongToBigInt
 
 
 
@@ -55,10 +56,15 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     case Node(False, uset) => IntSet.fromBitVector(false :: uset.falseMost.get.padTo(boundedBits.bits - 1, false))(int, bounded, boundedBits)
     case Node(set, _)      => IntSet.fromBitVector(true :: set.falseMost.get.padTo(boundedBits.bits - 1, false))(int, bounded, boundedBits)
   }
+
   def sizeBigInt: BigInt = {
     import scala.math.BigInt._
-    if(cbdd.depth < boundedBits.bits) (2 pow (boundedBits.bits - cbdd.depth)) * cbdd.count
-    else cbdd.count
+    assert(cbdd.depth <= boundedBits.bits)
+    if(cbdd.depth > 64) //we use long
+      //could be optimized by only going through cbdd.depth - 64 upper part.
+      cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
+    else
+      ((1: BigInt) << (boundedBits.bits - cbdd.depth)) * unsignedLongToBigInt(cbdd.count)
   }
   override def size : Int = {
     val bint = sizeBigInt
@@ -66,13 +72,7 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
     bint.intValue
   }
   def sizeGreaterThan(value : BigInt) : Boolean = {
-    import scala.math.BigInt.int2bigInt
-    var size : BigInt = 0
-    for(p <- cbdd.truePaths) {
-      size += 2 pow (boundedBits.bits - p.length)
-      if(size > value) return true
-    }
-    return false
+    sizeBigInt > value
   }
   def sizeGreaterThan(value : Int) : Boolean = sizeGreaterThan(value : BigInt)
   def randomElement() = {

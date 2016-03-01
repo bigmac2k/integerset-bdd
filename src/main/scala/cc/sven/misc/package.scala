@@ -1,10 +1,16 @@
 package cc.sven
 
 import cc.sven.tlike.IntLikeSet
+import java.nio.ByteBuffer
+import scala.math.BigInt
 
 package object misc {
   import scala.language.higherKinds
   import scala.language.implicitConversions
+
+  def unsignedLongToBigInt(l : Long) : BigInt = {
+    BigInt(ByteBuffer.allocate(9).putLong(1, l).array)
+  }
 
   trait Monad[M[_]] {
     def unit[A](a : A) : M[A]

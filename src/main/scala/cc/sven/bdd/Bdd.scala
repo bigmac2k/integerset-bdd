@@ -19,7 +19,18 @@ sealed abstract trait BDD {
 class CBDD(val bdd: BDD, val compl: Boolean) {
   def unary_! = new CBDD(bdd, !compl)
   def depth = bdd.depth
-  def count = if(compl) (1l << bdd.depth) - bdd.count else bdd.count
+  def count : Long = {
+    import scala.math.BigInt._
+    if(compl)
+      if(bdd.depth == 64)
+        //bdd.count will at least be 1 as only False has 0 and it has depth != 64
+        //interpretation is as unsigned long...
+        (((1 : BigInt) << bdd.depth) - (bdd.count : BigInt)).longValue
+      else
+        (1l << bdd.depth) - bdd.count
+    else
+      bdd.count
+  }
   private[this] def ite_raw( /*depth : Int,*/ triple: (CBDD, CBDD, CBDD), f: ( /*Int,*/ (CBDD, CBDD, CBDD)) => CBDD): CBDD =
     triple match {
       case (_, t, e) if t == e     => t
