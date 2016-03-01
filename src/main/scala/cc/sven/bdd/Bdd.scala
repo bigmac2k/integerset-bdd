@@ -397,11 +397,11 @@ class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
 }
 
 object Terminal extends BDD {
-  val depth = 0
+  val depth: Int = 0
   val tag: Int = 0
   val count: Long = 1
   val compl: Boolean = false
-  def toString(c: Boolean) = if (c) "False" else "True"
+  def toString(c: Boolean) = if (c) "False(" + tag + ", " + depth + ", " + 0 + ")" else "True(" + tag + ", " + depth + ", " + 1 + ")"
   override def hashCode = tag
 }
 
@@ -420,12 +420,13 @@ final class Node(val set: BDD, val uset: BDD, val compl: Boolean, val tag: Int) 
     case _ => if(compl) (1l << uset.depth) - uset.count else uset.count
   }
   
-  private def countL: Long = set.count 
+  private def countL: Long = set.count
   val count = if (uset.depth > set.depth)
       (1l << (uset.depth - set.depth)) * countL + countR
     else
       (1l << (set.depth - uset.depth)) * countR + countL
-  def toString(c: Boolean) = "Node(" + set.toString(c) + ", " + uset.toString(c != compl) + ", " + tag.toString + ")"
+  //def toString(c: Boolean) = "Node(" + set.toString(c) + ", " + uset.toString(c != compl) + ", " + tag.toString + ", " + count + ", " + depth + ")"
+  def toString(c: Boolean) = "Node(" + tag + ", " + depth + ", " + count + ", " + set.toString(c) + ", " + uset.toString(c != compl) + ")"
   override def hashCode = (set.tag, uset.tag, compl).hashCode
   override def equals(that: Any) = that match {
     case t: Node => compl == t.compl && (set eq t.set) && (uset eq t.uset)
