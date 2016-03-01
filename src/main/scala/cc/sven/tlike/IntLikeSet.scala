@@ -303,6 +303,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     assert(helper(set.cbdd, boundedBits.bits - bits), "Integrity failure in explicit check")
   }
   def iterator() = new IntLikeSetIterator(this)(castIT)
+  def javaIterator() = iterator().asJava
   def java = this.asJava
   def bitExtract(from : Int, to : Int) : IntLikeSet[I, T] = {
     require(from >= to && to >= 0)
