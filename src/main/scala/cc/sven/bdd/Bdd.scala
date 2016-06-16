@@ -4,12 +4,6 @@ import scala.collection.mutable.WeakHashMap
 import scala.ref._
 import cc.sven.misc.unsignedLongToBigInt
 
-/*
-import scala.concurrent._
-import scala.concurrent.duration.Duration.Inf
-import scala.concurrent.ExecutionContext.Implicits.global
-*/
-
 /** Trait of BDD objects.
   * BDD objects have a depth, specifying the total depth of the subtree,
   * a count of total paths to True terminals,
@@ -114,7 +108,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   def implies(that: CBDD) = ite(that, True)
 
   /** Partially evaluates a CBDD. Given a list of Booleans, representing a path, follows the path through
-    *  the CBDD, returning a Some(Terminal) if a Terminal is found in the path, else None.
+    * the CBDD, returning a Some(Terminal) if a Terminal is found in the path, else None.
     *
     * @param bs list of Booleans representing a path
     * @return an Option of Terminal in path
@@ -132,21 +126,30 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     * each non-Terminal Node, an element is added to the list. If set evaluates to False, false is added
     * and a recursive call on the unset branch is made, else element true is added and a recursive call on the set
     * branch is made. Recursion stops once a Terminal is found. If the Terminal is True, the list is returned. If the
-    * Terminal is False, the list is discarded and None is returned. TODO
+    * Terminal is False, the list is discarded and None is returned.
+    * Returns the path to the leftmost True Terminal if one exists, None else.
     *
     * Analogue: falseMost.
     *
-    * @return an Option of the constructed list of Booleans
+    * @return a path to the leftmost True Terminal
     */
   def trueMost: Option[List[Boolean]] = this match {
     case False => None
     case True => Some(Nil)
     case Node(False, uset) => uset.trueMost.map(false :: _)
-    case Node(set, _) => set.trueMost.map(true :: _) // true :: None ? TODO
+    case Node(set, _) => set.trueMost.map(true :: _)
   }
 
-  /** TODO
-    * @return
+  /** Creates a list of Booleans for the calling CBDD object. The list is constructed by traversing the tree. For
+    * each non-Terminal Node, an element is added to the list. If unset evaluates to False, true is added
+    * and a recursive call on the set branch is made, else element false is added and a recursive call on the unset
+    * branch is made. Recursion stops once a Terminal is found. If the Terminal is True, the list is returned. If the
+    * Terminal is False, the list is discarded and None is returned.
+    * Returns the path to the rightmost True Terminal if one exists, None else.
+    *
+    * Analogue: trueMost.
+    *
+    * @return a path to the rightmost True Terminal
     */
   def falseMost: Option[List[Boolean]] = this match {
     case False => None
@@ -161,6 +164,21 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case Node(set, uset) => set.computeTruePaths(true :: path) #::: uset.computeTruePaths(false :: path)
   }
 
+  /** Computes paths to True Terminals of calling CBDD object. Paths are represented as lists of Booleans, where
+    * each subsequent Boolean value specifies if left (set) or right (unset) path is taken. Head to tail in list
+    * represents top to bottom in tree. Paths are stored and returned in a Stream object.
+    *
+    * @return Stream object containing lists of paths to True Terminals
+    */
+  def truePaths = computeTruePaths(List()).map(_.reverse)
+
+  /** Computes a random path to a True Terminal of calling CBDD object. Returns Nil if caller is True. Throws
+    * NoSuchElementException if caller is False (i.e. an empty tree). Path is represented as list of Booleans,
+    * where each subsequent Boolean value specifies if left (set) or right (unset) path is taken. Head to tail in
+    * list represents top to bottom in tree.
+    *
+    * @return list of Booleans representing path to True Terminal
+    */
   def randomTruePath() = {
     def helper(bdd: CBDD, path: List[Boolean]): List[Boolean] = bdd match {
       case True => path
@@ -175,6 +193,8 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     helper(this, Nil).reverse
   }
 
+  /** Logical IMPLIES for CBDDs. Recursively traverses both argument CBDDs until a Terminal is found in either tree,
+    * applies traditional IMPLIES on respective Nodes, conjuncts results. */
   def doesImply(that: CBDD): Boolean = (this, that) match {
     case (a, b) if a == b => true
     case (Node(set1, uset1), Node(set2, uset2)) => set1.doesImply(set2) && uset1.doesImply(uset2)
@@ -185,6 +205,12 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case _ => false
   }
 
+  /** Truncates the calling CBDD object at specified depth, cut subtree is set to True. Returns calling object if
+    * tree depth is larger than specified depth.
+    *
+    * @param toTake depth, at which CBDD is to be cut
+    * @return truncated CBDD object
+    */
   def take(toTake: Int): CBDD = this match {
     case False => False
     case _ if toTake <= 0 => True
@@ -192,6 +218,16 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case True => True
   }
 
+  /** Drops part of the tree of the calling CBDD object by iteratively applying a reduction function on each Node,
+    * applying a separate mapping function on Terminals or Nodes at specified depth (up to which to drop to).
+    *
+    * @param toDrop depth, up to which to drop
+    * @param acc accumulator (TODO: WHAT'S THIS?)
+    * @param mapF mapping function to be applied to Terminals and Nodes at specified depth
+    * @param reduceF function with which to reduce when dropping
+    * @tparam A type parameter
+    * @return the CBDD object resulting
+    */
   def drop[A](toDrop: Int, acc: A, mapF: CBDD => A, reduceF: (A, A) => A): A = this match {
     case False => mapF(False)
     case _ if toDrop <= 0 => mapF(this)
@@ -203,8 +239,19 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case True => mapF(True)
   }
 
+  /** Particular application of drop, mapping function is identity, reduction function is OR.
+    *
+    * See: CBDD.drop
+    */
   def dropOr(toDrop: Int) = this.drop(toDrop, False, (x: CBDD) => x, (a: CBDD, b: CBDD) => a || b)
 
+  /** In calling CBDD, replaces any occurrences of one CBDD with another. Recursively checks calling object's tree for
+    * matches of tree to replace. Returns CBDD where all occurrences have been replaced.
+    *
+    * @param toReplace CBDD to replace
+    * @param toReplaceWith CBDD to replace occurrences with
+    * @return the resulting CBDD
+    */
   def replaceWith(toReplace: CBDD, toReplaceWith: CBDD): CBDD = if (this == toReplace) toReplaceWith
   else this match {
     case True => True
@@ -218,6 +265,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
 
   override def toString = bdd.toString(compl)
 
+  /** Logical EQUALS for CBDDs. */
   override def equals(that: Any) = that match {
     case t: CBDD => compl == t.compl && (bdd eq t.bdd)
     case _ => false
@@ -226,7 +274,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   override def hashCode = (bdd.hashCode, compl).hashCode
 }
 
-/** CBDD object. TODO
+/** CBDD object. TODO CONTINUE HERE
   */
 object CBDD {
 
@@ -586,7 +634,6 @@ object False extends CBDD(Terminal, true) {
   * Provides method status, which returns a string holding information on cache status.
   */
 object Node {
-  //this is potentially terrible. Values make keys strongly referenced? TODO?
   private[this] val cache = WeakHashMap.empty[BDD, WeakReference[BDD]]
   private[this] var tagCounter: Int = 1
 
