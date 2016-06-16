@@ -11,8 +11,6 @@ import cc.sven.integral.Implicits._
 import cc.sven.interval._
 import cc.sven.misc.unsignedLongToBigInt
 
-
-
 class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], boundedBits: BoundedBits[T]) extends Set[T] with SetLike[T, IntSet[T]] {
   //enumeration
   //interval

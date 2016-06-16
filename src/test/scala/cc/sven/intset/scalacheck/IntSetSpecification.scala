@@ -3,16 +3,16 @@ package cc.sven.intset.scalacheck
 import org.scalacheck.Properties
 import org.scalacheck.Prop.forAll
 import org.scalacheck.Test.Parameters
-import cc.sven.intset._
-import cc.sven.bounded._
-import cc.sven.integral._
-import cc.sven.intset.IntSet
 import scala.sys.BooleanProp
-import cc.sven.tlike._
-import cc.sven.constraint._
 import scala.collection.immutable.HashMap
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
+import cc.sven.intset.IntSet
+import cc.sven.intset._
+import cc.sven.bounded._
+import cc.sven.integral._
+import cc.sven.tlike._
+import cc.sven.constraint._
 import cc.sven.misc._
 import cc.sven.testmisc._
 
