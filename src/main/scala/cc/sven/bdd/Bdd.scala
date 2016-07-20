@@ -79,7 +79,6 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     }
 
   private[this] var recIte: ((CBDD, CBDD, CBDD)) => CBDD = null
-  // TODO ?
   private[this] val memIte: ((CBDD, CBDD, CBDD)) => CBDD = ite_raw(_, recIte)
   recIte = memIte
 
@@ -221,9 +220,9 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   /** Drops part of the tree of the calling CBDD object by iteratively applying a reduction function on each Node,
     * applying a separate mapping function on Terminals or Nodes at specified depth (up to which to drop to).
     *
-    * @param toDrop depth, up to which to drop
-    * @param acc accumulator (TODO: WHAT'S THIS?)
-    * @param mapF mapping function to be applied to Terminals and Nodes at specified depth
+    * @param toDrop  depth, up to which to drop
+    * @param acc     accumulator (TODO: WHAT'S THIS?)
+    * @param mapF    mapping function to be applied to Terminals and Nodes at specified depth
     * @param reduceF function with which to reduce when dropping
     * @tparam A type parameter
     * @return the CBDD object resulting
@@ -248,7 +247,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   /** In calling CBDD, replaces any occurrences of one CBDD with another. Recursively checks calling object's tree for
     * matches of tree to replace. Returns CBDD where all occurrences have been replaced.
     *
-    * @param toReplace CBDD to replace
+    * @param toReplace     CBDD to replace
     * @param toReplaceWith CBDD to replace occurrences with
     * @return the resulting CBDD
     */
@@ -263,6 +262,54 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     case Node(set, uset) => Node(set.replaceWith(toReplace, toReplaceWith), uset.replaceWith(toReplace, toReplaceWith))
   }
 
+  /** Naive widening. Given a precision Integer number, traverses two BDDs, checking where they are different. If
+    * precision depth is reached, subtrees that are different are approximated as True.
+    *
+    * @param that      counterpart to this; the other BDD
+    * @param precision integer, specifying the depth at which approximation should be done
+    * @return the widened BDD
+    */
+  def widen_naive(that: CBDD, precision: Int): CBDD = {
+    Console.println("widening_naive called, precision: " + precision)
+    def helper(a: CBDD, b: CBDD, precision: Int): CBDD = {
+      if (precision == 0) return True // depth is reached, subtree is set to True
+      if (b == True || b == False || a == b || a == True) return b // return b if terminal or unchanged or a geq b
+      (a, b) match {
+        case (False, Node(bLeft, bRight)) =>
+          Node(helper(False, bLeft, precision - 1), helper(False, bRight, precision - 1))
+        case (Node(aLeft, aRight), Node(bLeft, bRight)) =>
+          Node(helper(aLeft, bLeft, precision - 1), helper(aRight, bRight, precision - 1))
+      }
+    }
+    helper(this, that, precision)
+  }
+
+  /** Similar to naive approach. Argument BDD has to be strictly greater equal caller BDD.
+    *
+    * @param that
+    * @param precision
+    * @return
+    */
+  def widen_naive_hasStrictlyGrown(that: CBDD, precision: Int): CBDD = {
+    Console.println("widen_naive_hasStrictlyGrown called, precision: " + precision)
+    def helper(a: CBDD, b: CBDD, precision: Int): CBDD = {
+      if (precision == 0){
+        if (a.doesImply(b) && !a.equals(b)) {
+          return True
+        }
+        else return b
+      } // depth is reached, subtree is set to True
+      if (b == True || b == False || a == b || a == True) return b // return b if terminal or unchanged or a geq b
+      (a, b) match {
+        case (False, Node(bLeft, bRight)) =>
+          Node(helper(False, bLeft, precision - 1), helper(False, bRight, precision - 1))
+        case (Node(aLeft, aRight), Node(bLeft, bRight)) =>
+          Node(helper(aLeft, bLeft, precision - 1), helper(aRight, bRight, precision - 1))
+      }
+    }
+    helper(this, that, precision)
+  }
+
   override def toString = bdd.toString(compl)
 
   /** Logical EQUALS for CBDDs. */
@@ -274,7 +321,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   override def hashCode = (bdd.hashCode, compl).hashCode
 }
 
-/** CBDD object. TODO CONTINUE HERE
+/** CBDD object.
   */
 object CBDD {
 
