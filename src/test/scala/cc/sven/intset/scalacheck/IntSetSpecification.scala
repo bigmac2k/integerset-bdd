@@ -496,17 +496,18 @@ object IntSetSpecification extends Properties("IntSet") {
       ownneg == neg && ownpos == pos
   }
 */
-  property("(widen_naive result BDD geq argument BDDs)") = forAll{
-    (as : Set[Int], bs : Set[Int], prec : Int) =>
-      val a = IntSet(as).cbdd
-      val b = IntSet(bs).cbdd
-      val p = prec % 33
-      val c = a.widen_naive(b, prec)
+  property("(widen_naive result IntSet geq argument IntSets)") = forAll {
+    (as: Set[Int], bs: Set[Int], prec: Int) =>
+      val a = IntSet(as)
+      val b = IntSet(bs)
+      val p = prec % 33 //
+    val c = a.widen_naive(b, prec)
       val d = b.widen_naive(a, prec)
-      val e = a.widen_naive(b, p) // more likely to be relevant if precision \in {0, ..., 32}
-      val f = b.widen_naive(a, p)
-      a.doesImply(c) && b.doesImply(c) && a.doesImply(d) && b.doesImply(d) &&
-        a.doesImply(e) && b.doesImply(e) && a.doesImply(f) && b.doesImply(f) // geq?
+      val e = a.widen_naive(b, p) // more likely to be relevant if precision \in {0, ..., 32}, remove?
+    val f = b.widen_naive(a, p) //
+
+      a.forall(c.contains(_)) && b.forall(c.contains(_)) && a.forall(d.contains(_)) && b.forall(d.contains(_)) &&
+        a.forall(e.contains(_)) && b.forall(e.contains(_)) && a.forall(f.contains(_)) && b.forall(f.contains(_)) // geq?
   }
 /* [- AW -]
    Wichtigere Funktionalitaeten:

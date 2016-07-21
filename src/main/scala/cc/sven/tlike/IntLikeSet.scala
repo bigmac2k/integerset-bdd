@@ -399,6 +399,11 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
       restrictLessOrEqual(lowerSet)
     }
   }
+
+  def widen_naive(that: IntLikeSet[I, T], precision: Int) = {
+    checkBitWidth(this, that)
+    new IntLikeSet[I, T](bits, set.widen_naive(that.set, precision))
+  }
 }
 object IntLikeSet {
   def apply[I, T](bits : Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I]()(int, bounded, boundedBits))
