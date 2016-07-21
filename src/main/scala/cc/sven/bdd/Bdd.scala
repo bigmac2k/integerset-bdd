@@ -272,37 +272,16 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   def widen_naive(that: CBDD, precision: Int): CBDD = {
     Console.println("widening_naive called, precision: " + precision)
     def helper(a: CBDD, b: CBDD, precision: Int): CBDD = {
-      if (precision == 0) return True // depth is reached, subtree is set to True
-      if (b == True || b == False || a == b || a == True) return b // return b if terminal or unchanged or a geq b
-      (a, b) match {
+      // if precision is greater than argument depths, use || to compute precise join TODO: does this incr. performance?
+      if(precision > this.depth && precision > that.depth) return this || that
+      if (a == b) return b // return b if unchanged
+      // return True at precision depth or if either subtree is True
+      if (precision <= 0 || a == True || b == True) return True
+      (a, b) match { // traverse Trees
         case (False, Node(bLeft, bRight)) =>
           Node(helper(False, bLeft, precision - 1), helper(False, bRight, precision - 1))
-        case (Node(aLeft, aRight), Node(bLeft, bRight)) =>
-          Node(helper(aLeft, bLeft, precision - 1), helper(aRight, bRight, precision - 1))
-      }
-    }
-    helper(this, that, precision)
-  }
-
-  /** Similar to naive approach. Argument BDD has to be strictly greater equal caller BDD.
-    *
-    * @param that
-    * @param precision
-    * @return
-    */
-  def widen_naive_hasStrictlyGrown(that: CBDD, precision: Int): CBDD = {
-    Console.println("widen_naive_hasStrictlyGrown called, precision: " + precision)
-    def helper(a: CBDD, b: CBDD, precision: Int): CBDD = {
-      if (precision == 0){
-        if (a.doesImply(b) && !a.equals(b)) {
-          return True
-        }
-        else return b
-      } // depth is reached, subtree is set to True
-      if (b == True || b == False || a == b || a == True) return b // return b if terminal or unchanged or a geq b
-      (a, b) match {
-        case (False, Node(bLeft, bRight)) =>
-          Node(helper(False, bLeft, precision - 1), helper(False, bRight, precision - 1))
+        case (Node(aLeft, aRight), False) =>
+          Node(helper(aLeft, False, precision - 1), helper(aRight, False, precision - 1))
         case (Node(aLeft, aRight), Node(bLeft, bRight)) =>
           Node(helper(aLeft, bLeft, precision - 1), helper(aRight, bRight, precision - 1))
       }

@@ -9,6 +9,7 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import cc.sven.intset.IntSet
 import cc.sven.intset._
+import cc.sven.bdd._
 import cc.sven.bounded._
 import cc.sven.integral._
 import cc.sven.tlike._
@@ -19,7 +20,7 @@ import cc.sven.testmisc._
 object IntSetSpecification extends Properties("IntSet") {
   override def main(args : Array[String]): Unit = {
     this.check(Parameters.default.withMinSuccessfulTests(1000))
-  }
+  } /*
   property("bitVector identity[Int]") = forAll((a: Int) => IntSet.fromBitVector[Int](IntSet.toBitVector(a)) == a)
   property("set eq IntSet[Int]") = forAll{
     (a : Set[Int]) =>
@@ -493,6 +494,19 @@ object IntSetSpecification extends Properties("IntSet") {
       val ownneg = (Set[NBitLong]() /: bddneg)((acc, x) => acc + x)
       val ownpos = (Set[NBitLong]() /: bddpos)((acc, x) => acc + x)
       ownneg == neg && ownpos == pos
+  }
+*/
+  property("(widen_naive result BDD geq argument BDDs)") = forAll{
+    (as : Set[Int], bs : Set[Int], prec : Int) =>
+      val a = IntSet(as).cbdd
+      val b = IntSet(bs).cbdd
+      val p = prec % 33
+      val c = a.widen_naive(b, prec)
+      val d = b.widen_naive(a, prec)
+      val e = a.widen_naive(b, p) // more likely to be relevant if precision \in {0, ..., 32}
+      val f = b.widen_naive(a, p)
+      a.doesImply(c) && b.doesImply(c) && a.doesImply(d) && b.doesImply(d) &&
+        a.doesImply(e) && b.doesImply(e) && a.doesImply(f) && b.doesImply(f) // geq?
   }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
