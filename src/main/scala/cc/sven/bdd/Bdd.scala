@@ -8,7 +8,7 @@ import cc.sven.misc.unsignedLongToBigInt
   * BDD objects have a depth, specifying the total depth of the subtree,
   * a count of total paths to True terminals,
   * a nodecount, specifying how many nodes exist in the subtree,
-  * a tag, (TODO)
+  * a tag,
   * and a complement bit which can be set to invert the tree.
   * Supplies toString method.
   * Used by terminal. Used by Node.
@@ -23,14 +23,6 @@ sealed abstract trait BDD {
   def toString(c: Boolean): String
 }
 
-// TODO
-/** Class of CBDD with additional complement information. Used by root nodes.
-  * Defines operations with complement option.
-  * Uses helper method ite to implement operations.
-  *
-  * @param bdd   BDD object
-  * @param compl Boolean, specifying if BDD is inverted
-  */
 class CBDD(val bdd: BDD, val compl: Boolean) {
   def unary_! = new CBDD(bdd, !compl)
 
@@ -221,7 +213,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     * applying a separate mapping function on Terminals or Nodes at specified depth (up to which to drop to).
     *
     * @param toDrop  depth, up to which to drop
-    * @param acc     accumulator (TODO: WHAT'S THIS?)
+    * @param acc     accumulator
     * @param mapF    mapping function to be applied to Terminals and Nodes at specified depth
     * @param reduceF function with which to reduce when dropping
     * @tparam A type parameter
@@ -304,7 +296,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
   */
 object CBDD {
 
-  /** Iteratively constructs a CBDD from a nonempty list of Booleans. (TODO: = PATH?)
+  /** Iteratively constructs a CBDD from a nonempty list of Booleans.
     * If head is true, a Node is constructed where set is the tree constructed from the remaining list, unset is False,
     * If head is false, set and unset are swapped. If no bits remain, True is added instead.
     *
@@ -338,12 +330,6 @@ object CBDD {
     case false :: path_ => Node(set, CBDD(path_, set, uset, terminal))
   }
 
-  /** Iteratively constructs a CBDD from two paths to XXX represented as lists of Booleans. TODO do ite first
-    *
-    * @param path1
-    * @param path2
-    * @return
-    */
   def apply(path1: List[Boolean], path2: List[Boolean]): CBDD = {
     def checker(p1: List[Boolean], p2: List[Boolean]): Boolean = (p1, p2) match {
       case (true :: p1_, true :: p2_) => checker(p1_, p2_)
@@ -443,13 +429,6 @@ object CBDD {
     Node(nset, nuset)
   }
 
-  /** Method
-    *
-    * @param op
-    * @param op1
-    * @param op2
-    * @return
-    */
   def bitwiseOp(op: (Boolean, Boolean) => Boolean)(op1: CBDD, op2: CBDD): CBDD = (op1, op2) match {
     case (False, _) => False
     case (x, False) => bitwiseOp(op)(False, x)
@@ -552,12 +531,6 @@ object CBDD {
   }
 }
 
-/** Class of iterator over CBDD.
-  * Provides methods hasNext, next.
-  *
-  * @param cbdd   CBDD to iterate over
-  * @param layers TODO
-  */
 class CBDDIterator(cbdd: CBDD, layers: Int) extends Iterator[List[Boolean]] {
   private var wl: List[(CBDD, List[Boolean])] = List((cbdd, List.empty))
   private var nextElem: Option[(List[Boolean], List[Boolean])] = None
@@ -669,7 +642,7 @@ object Node {
     * If node count is very large in any BDD, ignores corresponding entry and saves information if any were skipped as
     * Boolean in right.
     *
-    * @return TODO
+    * @return
     */
   def nodeCount() = ((0: BigInt, false) /: cache.toList) { case ((n, huge), (bdd, _)) =>
     if (bdd.nodecount == -1) (n, true) else (unsignedLongToBigInt(bdd.nodecount) + n, huge)
