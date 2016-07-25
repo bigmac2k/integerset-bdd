@@ -316,6 +316,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val toDrop = bits - from - 1
     val toTake = from - to + 1
     val toFill = bits - toTake
+    if(isFull) return new IntLikeSet[I, T](toTake, fromBWCBDD(CBDD(List.fill(toFill)(false), False, False, True)).set)
+    if(isEmpty) return new IntLikeSet[I, T](toTake, fromBWCBDD(False).set)
     def takeFkt(cbdd : CBDD) : CBDD = cbdd.take(toTake)
     def reduceFkt(a : CBDD, b : CBDD) = a || b
     val iSet = fromBWCBDD(CBDD(List.fill(toFill)(false), False, False, getBWCBDD.drop(toDrop, False, takeFkt, reduceFkt)))
