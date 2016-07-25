@@ -18,5 +18,5 @@ test in assembly := {}
 
 
 
-// initialCommands in console := "import cc.sven.bdd._; import cc.sven.intset._; var a = Node(Node(Node(True, False),Node(True, False)),False); var b = Node(Node(Node(True, False),Node(True, False)),Node(Node(True, False),False)); var c = Node(Node(Node(True, False),Node(False, True)),Node(Node(True, False),False))"
+initialCommands in console := "import cc.sven.bdd._; import cc.sven.intset._; var a = Node(Node(Node(True, False),Node(True, False)),False); var b = Node(Node(Node(True, False),Node(True, False)),Node(Node(True, False),False)); var c = Node(Node(Node(True, False),Node(False, True)),Node(Node(True, False),False))"
 
