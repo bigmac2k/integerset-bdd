@@ -262,14 +262,17 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     * @return the widened BDD
     */
   def widen_naive(that: CBDD, precision: Int): CBDD = {
-    Console.println("widening_naive called, precision: " + precision)
+    Console.println(" - widening_naive, prec.: " + precision + ", count/nodecount/depth old: (" + count + "/"
+      + nodecount + "/" + depth + "), count/nodecount/depth new: (" + that.count + "/" + that.nodecount + "/" + that
+      .depth + ")")
     def helper(a: CBDD, b: CBDD, precision: Int): CBDD = {
       // if precision is greater than argument depths, use || to compute precise join TODO: does this incr. performance?
-      if(precision > this.depth && precision > that.depth) return this || that
+      if (precision > this.depth && precision > that.depth) return this || that
       if (a == b) return b // return b if unchanged
       // return True at precision depth or if either subtree is True
       if (precision <= 0 || a == True || b == True) return True
-      (a, b) match { // traverse Trees
+      (a, b) match {
+        // traverse Trees
         case (False, Node(bLeft, bRight)) =>
           Node(helper(False, bLeft, precision - 1), helper(False, bRight, precision - 1))
         case (Node(aLeft, aRight), False) =>
