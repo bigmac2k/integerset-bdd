@@ -79,7 +79,8 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
 		//could be optimized by only going through cbdd.depth - 64 upper part.
 			cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
 		else
-			((1: BigInt) << (boundedBits.bits - cbdd.depth)) * unsignedLongToBigInt(cbdd.count)
+			CBDD.sizeBigInt(cbdd, boundedBits.bits)
+			//((1: BigInt) << (boundedBits.bits - cbdd.depth)) * unsignedLongToBigInt(cbdd.count)
 	}
 
 	override def size: Int = {

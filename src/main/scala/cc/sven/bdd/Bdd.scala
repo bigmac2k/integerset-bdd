@@ -6,7 +6,7 @@ import cc.sven.misc.unsignedLongToBigInt
 
 /** Trait of BDD objects.
   * BDD objects have a depth, specifying the total depth of the subtree,
-  * a count of total paths to True terminals,
+  * a count of total paths to True terminals if all subtrees had same depth,
   * a nodecount, specifying how many nodes exist in the subtree,
   * a tag,
   * and a complement bit which can be set to invert the tree.
@@ -531,6 +531,13 @@ object CBDD {
       Node(not, not)
     }
     case Node(set, uset) => Node(bNot(uset), bNot(set))
+  }
+
+  def sizeBigInt(a: CBDD, bits: Int): BigInt = {
+    // Console.println("bits: " + bits)
+    /*val bint =*/ ((1: BigInt) << (bits - a.depth)) * unsignedLongToBigInt(a.count)
+    //if(bint > Integer.MAX_VALUE) throw new IllegalArgumentException("size does not fit into an Int")
+    //bint.intValue
   }
 }
 

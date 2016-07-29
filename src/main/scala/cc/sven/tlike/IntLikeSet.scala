@@ -94,7 +94,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 		//could be optimized by only going through cbdd.depth - 64 upper part.
 			set.cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
 		else
-			((1: BigInt) << (boundedBits.bits - set.cbdd.depth)) * unsignedLongToBigInt(set.cbdd.count)
+			CBDD.sizeBigInt(set.cbdd, boundedBits.bits)
+			// ((1: BigInt) << (boundedBits.bits - set.cbdd.depth)) * unsignedLongToBigInt(set.cbdd.count)
 	}
 	override def size : Int = {
 		val bint = sizeBigInt
