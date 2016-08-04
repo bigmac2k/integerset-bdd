@@ -24,6 +24,7 @@ sealed abstract trait BDD {
 }
 
 class CBDD(val bdd: BDD, val compl: Boolean) {
+
   def unary_! = new CBDD(bdd, !compl)
 
   def depth = bdd.depth
@@ -262,17 +263,19 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     * @return the widened BDD
     */
   def widen_naive(that: CBDD, precision: Int): CBDD = {
-    Console.println(" - widening_naive, prec.: " + precision + ", count/nodecount/depth old: (" + count + "/"
-      + nodecount + "/" + depth + "), count/nodecount/depth new: (" + that.count + "/" + that.nodecount + "/" + that
-      .depth + ")")
+    //Console.println(" - widening_naive, prec.: " + precision + ", count/nodecount/depth old: (" + count + "/"
+    // + nodecount + "/" + depth + "), count/nodecount/depth new: (" + that.count + "/" + that.nodecount + "/" + that
+    // .depth + ")")
     def helper(a: CBDD, b: CBDD, precision: Int): CBDD = {
-      // if precision is greater than argument depths, use || to compute precise join TODO: does this incr. performance?
+      // if precision is greater than argument depths, use || to compute precise join
       if (precision > this.depth && precision > that.depth) return this || that
-      if (a == b) return b // return b if unchanged
+      // return b if unchanged and remaining precision greater subtree TODO cut at precision or leave subtree?
+      if (a == b /*&& a.depth < precision*/ ) return a
       // return True at precision depth or if either subtree is True
       if (precision <= 0 || a == True || b == True) return True
       (a, b) match {
         // traverse Trees
+        case (False, False) => False
         case (False, Node(bLeft, bRight)) =>
           Node(helper(False, bLeft, precision - 1), helper(False, bRight, precision - 1))
         case (Node(aLeft, aRight), False) =>
@@ -282,6 +285,64 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
       }
     }
     helper(this, that, precision)
+  }
+
+  def update_precisionTree(a: CBDD, b: CBDD): CBDD = {
+    def helper(p: CBDD, a: CBDD, b: CBDD): CBDD = {
+      if (a == b) return p
+      (p, a, b) match {
+        case (_, True, _) => True
+        case (_, _, True) => True
+
+        case (Node(pLeft, pRight), False, Node(bLeft, bRight)) =>
+          Node(helper(pLeft, False, bLeft), helper(pRight, False, bRight))
+        case (Node(pLeft, pRight), Node(aLeft, aRight), False) =>
+          Node(helper(pLeft, aLeft, False), helper(pRight, aRight, False))
+        case (Node(pLeft, pRight), Node(aLeft, aRight), Node(bLeft, bRight)) =>
+          Node(helper(pLeft, aLeft, bLeft), helper(pRight, aRight, bRight))
+
+        case (_, Node(False, _), False) =>
+          Node(False, True)
+        case (_, Node(_, False), False) =>
+          Node(True, False)
+        case (_, False, Node(False, _)) =>
+          Node(False, True)
+        case (_, False, Node(_, False)) =>
+          Node(True, False)
+
+        case (_, Node(aLeft, aRight), Node(bLeft, bRight)) if (CBDD.sizeBigInt(aLeft, 64) - CBDD.sizeBigInt(bLeft,
+          64)).abs <= (CBDD.sizeBigInt(aRight, 64) - CBDD.sizeBigInt(bRight, 64)).abs =>
+          Node(False, True)
+        case (_, Node(aLeft, aRight), Node(bLeft, bRight)) =>
+          Node(True, False)
+      }
+    }
+
+    helper(this, a, b)
+  }
+
+  def widen_precisionTree(that: CBDD, precTree: CBDD): CBDD = {
+    def helper(a: CBDD, b: CBDD, precTree: CBDD, posDepth: Int): CBDD = {
+      (a, b, precTree, posDepth) match {
+
+        case (_, True, _, _) => True
+        case (True, _, _, _) => True
+        case (False, False, _, _) => False
+
+        case (a, b, True, acc) => a.widen_naive(b, 64 - acc - (0 to acc).sum)
+        case (a, b, False, acc) => a.widen_naive(b, 64 - (0 to acc).sum)
+
+        case (False, Node(bLeft, bRight), Node(pLeft, pRight), acc) =>
+          Node(helper(False, bLeft, pLeft, acc + 1), helper(False, bRight, pRight, acc + 1))
+        case (Node(aLeft, aRight), False, Node(pLeft, pRight), acc) =>
+          Node(helper(aLeft, False, pLeft, acc + 1), helper(aRight, False, pRight, acc + 1))
+
+        case (Node(aLeft, aRight), Node(bLeft, bRight), Node(pLeft, pRight), acc) =>
+          Node(helper(aLeft, bLeft, pLeft, acc + 1), helper(aRight, bRight, pRight, acc + 1))
+      }
+    }
+
+    helper(this, that, precTree, 0)
   }
 
   override def toString = bdd.toString(compl)

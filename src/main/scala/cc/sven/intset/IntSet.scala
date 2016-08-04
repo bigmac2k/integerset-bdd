@@ -159,10 +159,15 @@ class IntSet[T](val cbdd: CBDD)(implicit int: Integral[T], bounded: Bounded[T], 
 
 	def java = this.asJava
 
-	def widen_naive(that: IntSet[T], precision: Int): IntSet[T] ={
+	def widen_naive(that: IntSet[T], precision: Int): IntSet[T] = {
 		val r = cbdd.widen_naive(that.cbdd, precision)
 		Console.println(" - widen returned count/nodecount/depth: (" + r.count + "/" + r.nodecount + "/" + r.depth + ")")
 		// Console.println(" - truePaths: " + r.truePaths.take(r.truePaths.size + 1).toList)
+		new IntSet(r)
+	}
+
+	def widen_precisionTree(that: IntSet[T], precision: CBDD): IntSet[T] = {
+		val r = cbdd.widen_precisionTree(that.cbdd, precision)
 		new IntSet(r)
 	}
 }
