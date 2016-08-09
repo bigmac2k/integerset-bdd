@@ -304,16 +304,29 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
         case (_, Node(False, _), False) =>
           Node(False, True)
         case (_, Node(_, False), False) =>
+          Console.println("##### since (_, Node(_, False), False), update_precisionTree created N(T, F)")
           Node(True, False)
         case (_, False, Node(False, _)) =>
           Node(False, True)
         case (_, False, Node(_, False)) =>
+          Console.println("##### since (_, False, Node(_, False)), update_precisionTree created N(T, F)")
           Node(True, False)
+
+        case (_, False, Node(bLeft, bRight)) if CBDD.sizeBigInt(bLeft, 64) <= CBDD.sizeBigInt(bRight, 64) =>
+          Console.println("# since " + CBDD.sizeBigInt(bLeft, 64) + " <= " + CBDD.sizeBigInt(bRight, 64) + ", N(F, T)")
+          Node(False, True)
+        case (_, Node(aLeft, aRight), False) if CBDD.sizeBigInt(aLeft, 64) <= CBDD.sizeBigInt(aRight, 64) =>
+          Console.println("# since " + CBDD.sizeBigInt(aLeft, 64) + " <= " + CBDD.sizeBigInt(aRight, 64) + ", N(F, T)")
+          Node(False, True)
 
         case (_, Node(aLeft, aRight), Node(bLeft, bRight)) if (CBDD.sizeBigInt(aLeft, 64) - CBDD.sizeBigInt(bLeft,
           64)).abs <= (CBDD.sizeBigInt(aRight, 64) - CBDD.sizeBigInt(bRight, 64)).abs =>
+          Console.println("# since |" + (CBDD.sizeBigInt(aLeft, 64) + " - " + CBDD.sizeBigInt(bLeft,
+            64)) + "| <= |" + (CBDD.sizeBigInt(aRight, 64) + " - " + CBDD.sizeBigInt(bRight, 64)) + "|, N(F, T)")
           Node(False, True)
         case (_, Node(aLeft, aRight), Node(bLeft, bRight)) =>
+          Console.println("##### since (_, Node(aLeft, aRight), Node(bLeft, bRight)) (last case), " +
+            "update_precisionTree " + "created N(T, F)")
           Node(True, False)
       }
     }
@@ -323,14 +336,18 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
 
   def widen_precisionTree(that: CBDD, precTree: CBDD): CBDD = {
     def helper(a: CBDD, b: CBDD, precTree: CBDD, posDepth: Int): CBDD = {
+      if (64 - precTree.depth < 2 * posDepth + 1) { // TODO: make sure this does what it's supposed to
+        Console.println(" # Precision tree has reached a depth >= 32. Depth: " + (precTree.depth + posDepth) + ". " +
+          "instead of widen_precisionTree, calling widen_naive at depth " + posDepth)
+        return a.widen_naive(b, 0)
+      }
       (a, b, precTree, posDepth) match {
-
         case (_, True, _, _) => True
         case (True, _, _, _) => True
         case (False, False, _, _) => False
 
-        case (a, b, True, acc) => a.widen_naive(b, 64 - acc - (0 to acc).sum)
-        case (a, b, False, acc) => a.widen_naive(b, 64 - (0 to acc).sum)
+        case (a, b, True, acc) => a.widen_naive(b, 64 - 2 * acc - 1) /*(0 to acc).sum)*/
+        case (a, b, False, acc) => a.widen_naive(b, 64 - 2 * acc) /*(0 to acc).sum)*/
 
         case (False, Node(bLeft, bRight), Node(pLeft, pRight), acc) =>
           Node(helper(False, bLeft, pLeft, acc + 1), helper(False, bRight, pRight, acc + 1))
