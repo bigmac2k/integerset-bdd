@@ -401,14 +401,14 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 		}
 	}
 
-	def widen_naive(that: IntLikeSet[I, T], precision: Int) = {
+	def widenNaive(that: IntLikeSet[I, T], precision: Int) = {
 		checkBitWidth(this, that)
-		new IntLikeSet[I, T](bits, set.widen_naive(that.set, precision))
+		new IntLikeSet[I, T](bits, set.widenNaive(that.set, precision))
 	}
 
-	def widen_precisionTree(that: IntLikeSet[I, T], precision: CBDD) = {
+	def widenPrecisionTree(that: IntLikeSet[I, T], precision: CBDD) = {
 		checkBitWidth(this, that)
-		new IntLikeSet[I, T](bits, set.widen_precisionTree(that.set, precision))
+		new IntLikeSet[I, T](bits, set.widenPrecisionTree(that.set, precision))
 	}
 }
 object IntLikeSet {

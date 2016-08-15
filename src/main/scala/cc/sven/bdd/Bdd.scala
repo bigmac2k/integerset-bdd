@@ -262,14 +262,14 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     * @param precision integer, specifying the depth at which approximation should be done
     * @return the widened BDD
     */
-  def widen_naive(that: CBDD, precision: Int): CBDD = {
+  def widenNaive(that: CBDD, precision: Int): CBDD = {
     //Console.println(" - widening_naive, prec.: " + precision + ", count/nodecount/depth old: (" + count + "/"
     // + nodecount + "/" + depth + "), count/nodecount/depth new: (" + that.count + "/" + that.nodecount + "/" + that
     // .depth + ")")
     def helper(a: CBDD, b: CBDD, precision: Int): CBDD = {
       // if precision is greater than argument depths, use || to compute precise join
       if (precision > this.depth && precision > that.depth) return this || that
-      // return b if unchanged and remaining precision greater subtree TODO cut at precision or leave subtree?
+      // return b if unchanged and remaining precision greater subtree
       if (a == b /*&& a.depth < precision*/ ) return a
       // return True at precision depth or if either subtree is True
       if (precision <= 0 || a == True || b == True) return True
@@ -287,12 +287,21 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     helper(this, that, precision)
   }
 
-  def update_precisionTree(a: CBDD, b: CBDD): CBDD = {
+  /** Updates the precision tree CBDD used in widen_precisionTree according to some heuristic. Does nothing if
+    * argument CBDDs are the same. Traverses the tree until a Terminal is found, replacing the Terminal with a node
+    * where the side of greater change is True and side of less change is False.
+    *
+    * @param a first widening argument CBDD
+    * @param b second widening argument CBDD
+    * @return the updated precision tree CBDD
+    */
+  def updatePrecisionTree(a: CBDD, b: CBDD): CBDD = {
     def helper(p: CBDD, a: CBDD, b: CBDD): CBDD = {
       if (a == b) return p
       (p, a, b) match {
-        case (_, True, _) => True
+        case (_, True, _) => True // sure that I want these? function well, but violate property that p strictly grows
         case (_, _, True) => True
+        // could: propagate True along tree until Terminal found in precision tree, extend precision tree
 
         case (Node(pLeft, pRight), False, Node(bLeft, bRight)) =>
           Node(helper(pLeft, False, bLeft), helper(pRight, False, bRight))
@@ -304,12 +313,12 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
         case (_, Node(False, _), False) =>
           Node(False, True)
         case (_, Node(_, False), False) =>
-          Console.println("##### since (_, Node(_, False), False), update_precisionTree created N(T, F)")
+          Console.println("##### since (_, Node(_, False), False), updatePrecisionTree created N(T, F)")
           Node(True, False)
         case (_, False, Node(False, _)) =>
           Node(False, True)
         case (_, False, Node(_, False)) =>
-          Console.println("##### since (_, False, Node(_, False)), update_precisionTree created N(T, F)")
+          Console.println("##### since (_, False, Node(_, False)), updatePrecisionTree created N(T, F)")
           Node(True, False)
 
         case (_, False, Node(bLeft, bRight)) if CBDD.sizeBigInt(bLeft, 64) <= CBDD.sizeBigInt(bRight, 64) =>
@@ -326,7 +335,7 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
           Node(False, True)
         case (_, Node(aLeft, aRight), Node(bLeft, bRight)) =>
           Console.println("##### since (_, Node(aLeft, aRight), Node(bLeft, bRight)) (last case), " +
-            "update_precisionTree " + "created N(T, F)")
+            "updatePrecisionTree " + "created N(T, F)")
           Node(True, False)
       }
     }
@@ -334,20 +343,33 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     helper(this, a, b)
   }
 
-  def widen_precisionTree(that: CBDD, precTree: CBDD): CBDD = {
+  /** Widening operator of CBDD. Takes a second CBDD for widening, and a third CBDD holding precision information.
+    * Traverses the tree until either a Terminal node is found, calling naive widening with precision equal to
+    * (64 - depth of terminal in precision tree), or until (64 - depth of remaining precision tree < 2 * depth of
+    * tree already traversed + 1), calling naive widening with precision 0.
+    * The depth of the precision tree specifies where naive widening occurs. If the precision tree has
+    * less depth in a subtree, widening will be executed with higher precision, and vice versa. If the precision tree
+    * has depth greater equal 32 (i.e., half its maximum depth), precision for naive widening will become less than
+    * depth of precision tree (e.g., if precision tree has depth of 64, widening will immediately return True).
+    *
+    * @param that     counterpart to this; the other CBDD
+    * @param precTree CBDD holding precision information, updated in updatePrecisionTree
+    * @return the widened CBDD
+    */
+  def widenPrecisionTree(that: CBDD, precTree: CBDD): CBDD = {
     def helper(a: CBDD, b: CBDD, precTree: CBDD, posDepth: Int): CBDD = {
-      if (64 - precTree.depth < 2 * posDepth + 1) { // TODO: make sure this does what it's supposed to
+      if (64 - precTree.depth < 2 * posDepth + 1) {
         Console.println(" # Precision tree has reached a depth >= 32. Depth: " + (precTree.depth + posDepth) + ". " +
           "instead of widen_precisionTree, calling widen_naive at depth " + posDepth)
-        return a.widen_naive(b, 0)
+        return a.widenNaive(b, 0)
       }
       (a, b, precTree, posDepth) match {
         case (_, True, _, _) => True
         case (True, _, _, _) => True
         case (False, False, _, _) => False
 
-        case (a, b, True, acc) => a.widen_naive(b, 64 - 2 * acc - 1) /*(0 to acc).sum)*/
-        case (a, b, False, acc) => a.widen_naive(b, 64 - 2 * acc) /*(0 to acc).sum)*/
+        case (a, b, True, acc) => a.widenNaive(b, 64 - 2 * acc - 1) /*(0 to acc).sum)*/
+        case (a, b, False, acc) => a.widenNaive(b, 64 - 2 * acc) /*(0 to acc).sum)*/
 
         case (False, Node(bLeft, bRight), Node(pLeft, pRight), acc) =>
           Node(helper(False, bLeft, pLeft, acc + 1), helper(False, bRight, pRight, acc + 1))

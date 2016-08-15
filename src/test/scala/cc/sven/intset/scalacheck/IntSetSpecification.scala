@@ -500,8 +500,8 @@ object IntSetSpecification extends Properties("IntSet") {
 		(as: Set[Int], bs: Set[Int], prec: Int) =>
 			val a = IntSet(as)
 			val b = IntSet(bs)
-			val c = a.widen_naive(b, prec)
-			val d = b.widen_naive(a, prec)
+			val c = a.widenNaive(b, prec)
+			val d = b.widenNaive(a, prec)
 
 			a.forall(c.contains(_)) && b.forall(c.contains(_)) && a.forall(d.contains(_)) && b.forall(d.contains(_)) // geq?
 	}
