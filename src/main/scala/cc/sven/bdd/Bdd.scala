@@ -291,18 +291,75 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
     * argument CBDDs are the same. Traverses the tree until a Terminal is found, replacing the Terminal with a node
     * where the side of greater change is True and side of less change is False.
     *
+    * TODO COMPLETE
+    *
     * @param a first widening argument CBDD
     * @param b second widening argument CBDD
     * @return the updated precision tree CBDD
     */
   def updatePrecisionTree(a: CBDD, b: CBDD): CBDD = {
+
     def helper(p: CBDD, a: CBDD, b: CBDD): CBDD = {
+
+      // Returns Node(True, False) if difference between arguments is greater in left subtree than in right subtree.
+      // Returns Node(False, True) otherwise.
+      def createNode(a: CBDD, b: CBDD) = {
+        (a, b) match {
+          // all cases unique. Commented out all cases that return Node(False, True), caught in last case.
+
+          // case (True, False) => Node(False, True)
+          // case (False, True) => Node(False, True)
+
+          case (True, Node(bLeft, bRight)) if CBDD.sizeBigInt(bLeft, 64) < CBDD.sizeBigInt(bRight, 64) =>
+            Node(True, False)
+          // case (True, Node(bLeft, bRight)) => Node(False, True)
+          case (Node(aLeft, aRight), True) if CBDD.sizeBigInt(aLeft, 64) < CBDD.sizeBigInt(aRight, 64) =>
+            Node(True, False)
+          // case (Node(aLeft, aRight), True) => Node(False, True)
+
+          case (False, Node(bLeft, bRight)) if CBDD.sizeBigInt(bLeft, 64) > CBDD.sizeBigInt(bRight, 64) =>
+            Node(True, False)
+          // case (False, Node(bLeft, bRight)) => Node(False, True)
+          case (Node(aLeft, aRight), False) if CBDD.sizeBigInt(aLeft, 64) > CBDD.sizeBigInt(aRight, 64) =>
+            Node(True, False)
+          // case (Node(aLeft, aRight), False) => Node(False, True)
+
+          case (Node(aLeft, aRight), Node(bLeft, bRight)) if (CBDD.sizeBigInt(aLeft, 64) - CBDD.sizeBigInt(bLeft,
+            64)).abs > (CBDD.sizeBigInt(aRight, 64) - CBDD.sizeBigInt(bRight, 64)).abs =>
+            Node(True, False)
+          // case (Node(aLeft, aRight), Node(bLeft, bRight)) => Node(False, True)
+
+          // catch all
+          case (_, _) => Node(False, True)
+        }
+      }
+
       if (a == b) return p
       (p, a, b) match {
-        case (_, True, _) => True // sure that I want these? function well, but violate property that p strictly grows
-        case (_, _, True) => True
-        // could: propagate True along tree until Terminal found in precision tree, extend precision tree
+        // special case: potential generation of Node(True, True). Reduction needs to be avoided. Cheat.
+        case (Node(False, True), Node(aLeft, aRight), Node(bLeft, bRight)) if aRight == bRight =>
+          Node(createNode(aLeft, bLeft), True)
+        case (Node(True, False), Node(aLeft, aRight), Node(bLeft, bRight)) if aLeft == bLeft =>
+          Node(True, createNode(aRight, bRight))
 
+        case (Node(False, True), False, Node(bLeft, False)) =>
+          Node(createNode(False, bLeft), True)
+        case (Node(True, False), False, Node(False, bRight)) =>
+          Node(True, createNode(False, bRight))
+        case (Node(False, True), Node(aLeft, False), False) =>
+          Node(createNode(aLeft, False), True)
+        case (Node(True, False), Node(False, aRight), False) =>
+          Node(True, createNode(aRight, False))
+
+        // Onward: Heuristic. Everything that is not special case.
+        case (False, _, _) => True
+
+        // if in either arg True is reached, shape of precision-subtree does not matter for further steps
+        // in this case, increase depth by one (case: precision == False is caught earlier)
+        case (p, True, _) => Node(False, p)
+        case (p, _, True) => Node(False, p)
+
+        // precision is not Terminal: continue traversal of precision
         case (Node(pLeft, pRight), False, Node(bLeft, bRight)) =>
           Node(helper(pLeft, False, bLeft), helper(pRight, False, bRight))
         case (Node(pLeft, pRight), Node(aLeft, aRight), False) =>
@@ -310,17 +367,18 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
         case (Node(pLeft, pRight), Node(aLeft, aRight), Node(bLeft, bRight)) =>
           Node(helper(pLeft, aLeft, bLeft), helper(pRight, aRight, bRight))
 
+        // precision == True: replace with Node(True, False), Node(False, True), depending on location of greater
+        // change observed. If same in both: Node(False, True)
         case (_, Node(False, _), False) =>
           Node(False, True)
         case (_, Node(_, False), False) =>
-          Console.println("##### since (_, Node(_, False), False), updatePrecisionTree created N(T, F)")
           Node(True, False)
         case (_, False, Node(False, _)) =>
           Node(False, True)
         case (_, False, Node(_, False)) =>
-          Console.println("##### since (_, False, Node(_, False)), updatePrecisionTree created N(T, F)")
           Node(True, False)
 
+        // could use createNode() here
         case (_, False, Node(bLeft, bRight)) if CBDD.sizeBigInt(bLeft, 64) <= CBDD.sizeBigInt(bRight, 64) =>
           Console.println("# since " + CBDD.sizeBigInt(bLeft, 64) + " <= " + CBDD.sizeBigInt(bRight, 64) + ", N(F, T)")
           Node(False, True)
@@ -334,8 +392,8 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
             64)) + "| <= |" + (CBDD.sizeBigInt(aRight, 64) + " - " + CBDD.sizeBigInt(bRight, 64)) + "|, N(F, T)")
           Node(False, True)
         case (_, Node(aLeft, aRight), Node(bLeft, bRight)) =>
-          Console.println("##### since (_, Node(aLeft, aRight), Node(bLeft, bRight)) (last case), " +
-            "updatePrecisionTree " + "created N(T, F)")
+          Console.println("# since |" + (CBDD.sizeBigInt(aLeft, 64) + " - " + CBDD.sizeBigInt(bLeft,
+            64)) + "| > |" + (CBDD.sizeBigInt(aRight, 64) + " - " + CBDD.sizeBigInt(bRight, 64)) + "|, N(T, F)")
           Node(True, False)
       }
     }
@@ -368,8 +426,8 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
         case (True, _, _, _) => True
         case (False, False, _, _) => False
 
-        case (a, b, True, acc) => a.widenNaive(b, 64 - 2 * acc - 1) /*(0 to acc).sum)*/
-        case (a, b, False, acc) => a.widenNaive(b, 64 - 2 * acc) /*(0 to acc).sum)*/
+        case (a, b, True, acc) => a.widenNaive(b, 64 - 2 * acc - 1)
+        case (a, b, False, acc) => a.widenNaive(b, 64 - 2 * acc)
 
         case (False, Node(bLeft, bRight), Node(pLeft, pRight), acc) =>
           Node(helper(False, bLeft, pLeft, acc + 1), helper(False, bRight, pRight, acc + 1))
