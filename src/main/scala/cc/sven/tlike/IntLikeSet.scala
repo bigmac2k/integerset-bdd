@@ -294,7 +294,10 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   def mulSingleton(op : T) : IntLikeSet[I, T] = {
     val (opBits, opI) = castTI(op)
     assert(opBits == bits)
-    val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
+
+    println(s"$set * $op")
+    val opBools = IntSet.toBitVector(opI) //.drop(boundedBits.bits - bits)
+
     //only positive for now...
     require(!opBools.head)
 
@@ -304,20 +307,34 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 
   def mulHelper(bdd: CBDD, op : List[Boolean], incomingEdge : Boolean, height : Int, value : Int) : IntLikeSet[I, T] = {
     val k = boundedBits.bits - height
-
+    val bits_ = boundedBits.bits
     bdd match {
-      case False => IntLikeSet[I, T](boundedBits.bits)
-      case n@True if k == 0 => val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
-        val s = new IntSet(shifted)
-        new IntLikeSet[I, T](boundedBits.bits, s)
-      case True => mulHelper(True, op, true, height + 1, value + 1 << k) union mulHelper(True, op, false, height + 1, value + 1 << k)
+      case False => IntLikeSet[I, T](bits_)
+      case n@True if k == 0 =>
+        val s = if (incomingEdge) {
+          val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
+          new IntLikeSet[I, T](bits_, new IntSet(shifted))
+        } else {
+          new IntLikeSet[I, T](bits_, new IntSet(CBDD(List.fill(bits_)(false))))
+        }
+        s
+      case True =>
+        val children = mulHelper(True, op, true, height + 1, value + 1 << k) union mulHelper(True, op, false, height + 1, value + 1 << k)
+        if (incomingEdge) {
+          val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
+          val s = new IntSet(shifted)
+          val intLikeSet = new IntLikeSet[I, T](bits_, s)
+          children plus intLikeSet
+        } else {
+          children
+        }
       case Node(s, uset) =>
         val trueM = mulHelper(s, op, true, height + 1, value + 1 << k)
         val falseM = mulHelper(uset, op, false, height + 1, value)
         if (incomingEdge) {
           val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
           val s = new IntSet(shifted)
-          val intLikeSet = new IntLikeSet[I, T](boundedBits.bits, s)
+          val intLikeSet = new IntLikeSet[I, T](bits_, s)
           (trueM union falseM) plus intLikeSet
         } else {
           trueM union falseM

@@ -298,18 +298,18 @@ object IntSetSpecification extends Properties("IntSet") {
       res
   }
   property("mulSingleton IntLike") = forAll{
-    (a : Set[Long], b : Long, bits : Int) =>
-      (a.forall(x => x > 0 && x < 3139923) && b > 0 && b < 10000 && bits >0) ==> {
+    (a : Set[Int], b : Int) =>
+      (b > 0) ==> {
         val longBits = implicitly[BoundedBits[Long]].bits
         val bits_ = longBits // (NBitLong.boundBits(bits) / 2) max 1
 
-        val aBounded = a.map(NBitLong.bound(_, bits_))
+        val aBounded = a.map(_.toLong).map(NBitLong.bound(_, bits_))
 
         val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
-        val b_ = NBitLong.bound(b, bits_)
+        val b_ = NBitLong.bound(b.toLong, bits_)
         val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 * x._2)
         //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
-        val us = a_.mulSingleton(NBitLong(bits_, b))
+        val us = a_.mulSingleton(NBitLong(bits_, b.toLong))
         val castIT = implicitly[Castable[(Int, Long), NBitLong]]
         val ref_ = ref.map((x: Long) => castIT((bits_ * 2, x)))
         val res = ref_.forall(us.contains)
