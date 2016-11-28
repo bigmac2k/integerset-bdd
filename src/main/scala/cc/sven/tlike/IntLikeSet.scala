@@ -297,9 +297,34 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
     //only positive for now...
     require(!opBools.head)
-    
-    ???
+
+    mulHelper(set.cbdd, opBools, false, 0, 0)
+    // ???
   }
+
+  def mulHelper(bdd: CBDD, op : List[Boolean], incomingEdge : Boolean, height : Int, value : Int) : IntLikeSet[I, T] = {
+    val k = boundedBits.bits - height
+
+    bdd match {
+      case False => IntLikeSet[I, T](boundedBits.bits)
+      case n@True if k == 0 => val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
+        val s = new IntSet(shifted)
+        new IntLikeSet[I, T](boundedBits.bits, s)
+      case True => mulHelper(True, op, true, height + 1, value + 1 << k) union mulHelper(True, op, false, height + 1, value + 1 << k)
+      case Node(s, uset) =>
+        val trueM = mulHelper(s, op, true, height + 1, value + 1 << k)
+        val falseM = mulHelper(uset, op, false, height + 1, value)
+        if (incomingEdge) {
+          val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
+          val s = new IntSet(shifted)
+          val intLikeSet = new IntLikeSet[I, T](boundedBits.bits, s)
+          (trueM union falseM) plus intLikeSet
+        } else {
+          trueM union falseM
+        }
+    }
+  }
+
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
       case _ if depth == 0 => true

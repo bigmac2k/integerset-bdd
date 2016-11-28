@@ -1,7 +1,7 @@
 package cc.sven.intset.scalacheck
 
 import org.scalacheck.Properties
-import org.scalacheck.Prop.forAll
+import org.scalacheck.Prop.{forAll, BooleanOperators}
 import org.scalacheck.Test.Parameters
 import cc.sven.intset._
 import cc.sven.bounded._
@@ -296,6 +296,27 @@ object IntSetSpecification extends Properties("IntSet") {
       val res = ref_.forall(us.contains)
       //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
       res
+  }
+  property("mulSingleton IntLike") = forAll{
+    (a : Set[Long], b : Long, bits : Int) =>
+      (a.forall(x => x > 0 && x < 3139923) && b > 0 && b < 10000 && bits >0) ==> {
+        val longBits = implicitly[BoundedBits[Long]].bits
+        val bits_ = longBits // (NBitLong.boundBits(bits) / 2) max 1
+
+        val aBounded = a.map(NBitLong.bound(_, bits_))
+
+        val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
+        val b_ = NBitLong.bound(b, bits_)
+        val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 * x._2)
+        //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
+        val us = a_.mulSingleton(NBitLong(bits_, b))
+        val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+        val ref_ = ref.map((x: Long) => castIT((bits_ * 2, x)))
+        val res = ref_.forall(us.contains)
+        //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+        res
+
+      }
   }
   property("range IntLike") = forAll{
     (lo : Long, hi : Long, bits : Int) =>
