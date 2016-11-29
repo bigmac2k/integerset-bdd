@@ -240,6 +240,42 @@ object CBDD {
       addMerge(ff, ft, tf, tt)
     }
   }
+  // this is prob
+  def plusSingleton(op1: CBDD, op2: List[Boolean], depth: Int): CBDDTuple = (op1, op2) match {
+    case (False, _) => (False, False)
+    case (True, Nil) =>
+      val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
+      (True, ov)
+    case (True, _) => {
+      val noOv = CBDD(op2, List.fill(depth)(true))
+      val ov = if(op2.forall(!_)) False else CBDD(List.fill(depth)(false), pred(op2)) // ???
+      (noOv, ov)
+    }
+    case (Node(set, uset), x :: xs) => {
+
+      if (x) {
+        // tt + ft
+        val tt = plusSingleton(set, xs, depth - 1) // 1
+        val ft = plusSingleton(uset, xs, depth - 1) // 0
+
+        val trueOVNot = ft._1
+        val falseOVNot = False
+        val trueOV = tt._2
+        val falseOV = tt._1 || ft._2
+        (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
+      } else {
+        val tf = plusSingleton(set, xs, depth - 1) // 1
+        val ff = plusSingleton(uset, xs, depth - 1) // 0
+
+        val trueOVNot = tf._1 || ff._2
+        val falseOVNot = ff._1
+        val trueOV = False
+        val falseOV = tf._2
+        (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
+      }
+    }
+  }
+
   def negate(bits : Int, bdd : CBDD) = {
     val (ov, norm) = plus(bNot(bdd), (CBDD(List.fill(bits - 1)(false) ++ List(true))), bits)
     ov || norm

@@ -135,6 +135,10 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val (norm, ov) = CBDD.plus(getBWCBDD, that.getBWCBDD, bits)
     (fromBWCBDD(norm), fromBWCBDD(ov))
   }
+  def plusSingleton(op: I): IntLikeSet[I,T] = {
+    val (norm, ov) = CBDD.plusSingleton(set.cbdd, IntSet.toBitVector(op), bits)
+    fromBWCBDD(norm) | fromBWCBDD(ov)
+  }
   def negate = fromBWCBDD(CBDD.negate(bits, getBWCBDD))
   def bAnd(that : IntLikeSet[I, T]) = {
     checkBitWidth(this, that)
@@ -291,6 +295,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
      case (acc, FilledIval(lo, hi)) => acc union IntLikeSet.range[I, T](bits_ min boundedBits.bits, lo, hi).changeBitWidth(bits_)
    }
   }
+
   def mulSingleton(op : T) : IntLikeSet[I, T] = {
     val (opBits, opI) = castTI(op)
     assert(opBits == bits)
@@ -317,6 +322,113 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 
     mulHelper2(set.cbdd, opI, incomingEdge = false, 0, 0)
     // ???
+  }
+
+  def mulSingleton3(op : T) : IntLikeSet[I, T] = {
+    val (opBits, opI) = castTI(op)
+    assert(opBits == bits)
+
+    // println(s"$set * $op")
+    val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
+
+    //only positive for now...
+    //require(!opBools.head)
+
+    fromBWCBDD(mulHelper3(set.cbdd, opI, opBools, incomingEdge = false, 0, int.zero))
+    // ???
+  }
+
+  def mulSingleton4(op : T) : IntLikeSet[I, T] = {
+    val (opBits, opI) = castTI(op)
+    assert(opBits == bits)
+
+    // println(s"$set * $op")
+    val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
+
+    //only positive for now...
+    //require(!opBools.head)
+
+    fromBWCBDD(mulHelper4(set.cbdd, opI, opBools, incomingEdge = false, 0, int.zero))
+    // ???
+  }
+
+  def mulHelper3(bdd: CBDD, opI : I, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : I) : CBDD = {
+    val opI_ = int.mkNumericOps(opI)
+    val value_ = int.mkNumericOps(smallestPossible)
+    val bits_ = boundedBits.bits
+    val k = bits_ - height
+    // println(s"Level: ${k} ${bdd}")
+    lazy val shiftedOpBdd = CBDD(op.drop(k) ++ List.fill(k)(false))
+    lazy val opSingleton = new IntLikeSet[I, T](bits_, new IntSet(shiftedOpBdd))
+    bdd match {
+        case False => False
+        case True if k == 0 => // leaf in lowest level
+        if (incomingEdge) {
+            CBDD(op) // {op}
+        } else {
+            CBDD(List.fill(64)(false)) // {0}
+        }
+        case True =>
+        // println(s"True terminal not on lowest level: ${k} - Start: ${opI_ *smallestPossible}, End: ${opI_ * (value_ + int.fromInt((1 << k) - 1))}")
+        val children = mulHelper3(True, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) || mulHelper3(True, opI, op, incomingEdge = false, height + 1, value_ + int.fromInt(1 << (k - 1))) // expand true node
+          //val children = createStridedInterval(opI_ * smallestPossible,  opI_ * (value_ + int.fromInt((1 << k) - 1)), int.one)
+        if (incomingEdge) {
+            val (norm, ov) = CBDD.plus(children, shiftedOpBdd, bits_)
+            norm || ov
+        } else {
+            children
+        }
+        case Node(s, uset) =>
+          val trueM = mulHelper3(s, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) // mult with "1" successor
+          val falseM = mulHelper3(uset, opI, op, incomingEdge = false, height + 1, smallestPossible) // mult with "0" successor
+          val combined = trueM || falseM
+          if (incomingEdge) {
+            val (norm, ov) = CBDD.plus(combined, shiftedOpBdd, bits_)
+            norm || ov
+          } else {
+            combined
+          }
+      }
+  }
+
+  def mulHelper4(bdd: CBDD, opI : I, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : I) : CBDD = {
+    val opI_ = int.mkNumericOps(opI)
+    val value_ = int.mkNumericOps(smallestPossible)
+    val bits_ = boundedBits.bits
+    val k = bits_ - height
+    // println(s"Level: ${k} ${bdd}")
+    lazy val shiftedOp = op.drop(k) ++ List.fill(k)(false)
+    lazy val shiftedOpBdd = CBDD(shiftedOp)
+    lazy val opSingleton = new IntLikeSet[I, T](bits_, new IntSet(shiftedOpBdd))
+    bdd match {
+      case False => False
+      case True if k == 0 => // leaf in lowest level
+        if (incomingEdge) {
+          CBDD(op) // {op}
+        } else {
+          CBDD(List.fill(64)(false)) // {0}
+        }
+      case True =>
+        // println(s"True terminal not on lowest level: ${k} - Start: ${opI_ *smallestPossible}, End: ${opI_ * (value_ + int.fromInt((1 << k) - 1))}")
+        val children = mulHelper4(True, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) || mulHelper4(True, opI, op, incomingEdge = false, height + 1, value_ + int.fromInt(1 << (k - 1))) // expand true node
+        //val children = createStridedInterval(opI_ * smallestPossible,  opI_ * (value_ + int.fromInt((1 << k) - 1)), int.one)
+        if (incomingEdge) {
+          val (norm, ov) = CBDD.plusSingleton(children, shiftedOp, bits_)
+          norm || ov
+        } else {
+          children
+        }
+      case Node(s, uset) =>
+        val trueM = mulHelper4(s, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) // mult with "1" successor
+      val falseM = mulHelper4(uset, opI, op, incomingEdge = false, height + 1, smallestPossible) // mult with "0" successor
+      val combined = trueM || falseM
+        if (incomingEdge) {
+          val (norm, ov) = CBDD.plusSingleton(combined, shiftedOp, bits_)
+          norm || ov
+        } else {
+          combined
+        }
+    }
   }
 
   def mulHelper(bdd: CBDD, opI : I, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : I) : IntLikeSet[I, T] = {
