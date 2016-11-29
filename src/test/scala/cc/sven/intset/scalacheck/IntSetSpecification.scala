@@ -298,25 +298,24 @@ object IntSetSpecification extends Properties("IntSet") {
       res
   }
   property("mulSingleton IntLike") = forAll{
-    (a : Set[Int], b : Int) =>
-      (b > 0) ==> {
-        val longBits = implicitly[BoundedBits[Long]].bits
-        val bits_ = longBits // (NBitLong.boundBits(bits) / 2) max 1
+    (a : Set[Long], b : Long) =>
+      val longBits = implicitly[BoundedBits[Long]].bits
+      val bits_ = longBits // (NBitLong.boundBits(bits) / 2) max 1
 
-        val aBounded = a.map(_.toLong).map(NBitLong.bound(_, bits_))
+      val aBounded = a.map(x => NBitLong.bound(x, bits_)) // TODO
 
-        val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
-        val b_ = NBitLong.bound(b.toLong, bits_)
-        val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 * x._2)
-        //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
-        val us = a_.mulSingleton(NBitLong(bits_, b.toLong))
-        val castIT = implicitly[Castable[(Int, Long), NBitLong]]
-        val ref_ = ref.map((x: Long) => castIT((bits_ * 2, x)))
-        val res = ref_.forall(us.contains)
-        //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
-        res
+      val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
+      val b_ = NBitLong.bound(b, bits_)
+      var start = System.nanoTime()
+      val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 * x._2)
+      //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
+      val us = a_.mulSingleton(NBitLong(bits_, b))
 
-      }
+      val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+      val ref_ = ref.map((x: Long) => castIT((bits_, x)))
+      val res = ref_.forall(us.contains) //&& ref_.forall(ns.contains)
+      //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+      res
   }
   property("range IntLike") = forAll{
     (lo : Long, hi : Long, bits : Int) =>

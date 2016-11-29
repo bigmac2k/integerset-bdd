@@ -295,51 +295,120 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val (opBits, opI) = castTI(op)
     assert(opBits == bits)
 
-    println(s"$set * $op")
-    val opBools = IntSet.toBitVector(opI) //.drop(boundedBits.bits - bits)
+   // println(s"$set * $op")
+    val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
 
     //only positive for now...
-    require(!opBools.head)
+    //require(!opBools.head)
 
-    mulHelper(set.cbdd, opBools, false, 0, 0)
+    mulHelper(set.cbdd, opI, opBools, incomingEdge = false, 0, int.zero)
     // ???
   }
 
-  def mulHelper(bdd: CBDD, op : List[Boolean], incomingEdge : Boolean, height : Int, value : Int) : IntLikeSet[I, T] = {
-    val k = boundedBits.bits - height
+  def mulSingleton2(op : T) : IntLikeSet[I, T] = {
+    val (opBits, opI) = castTI(op)
+    assert(opBits == bits)
+
+   // println(s"$set * $op")
+    val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
+
+    //only positive for now...
+    //require(!opBools.head)
+
+    mulHelper2(set.cbdd, opI, incomingEdge = false, 0, 0)
+    // ???
+  }
+
+  def mulHelper(bdd: CBDD, opI : I, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : I) : IntLikeSet[I, T] = {
+    val opI_ = int.mkNumericOps(opI)
+    val value_ = int.mkNumericOps(smallestPossible)
     val bits_ = boundedBits.bits
+    val k = bits_ - height
+    // println(s"Level: ${k} ${bdd}")
+    lazy val shiftedOpBdd = CBDD(op.drop(k) ++ List.fill(k)(false))
+    lazy val opSingleton = new IntLikeSet[I, T](bits_, new IntSet(shiftedOpBdd))
     bdd match {
       case False => IntLikeSet[I, T](bits_)
-      case n@True if k == 0 =>
-        val s = if (incomingEdge) {
-          val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
-          new IntLikeSet[I, T](bits_, new IntSet(shifted))
-        } else {
-          new IntLikeSet[I, T](bits_, new IntSet(CBDD(List.fill(bits_)(false))))
-        }
-        s
-      case True =>
-        val children = mulHelper(True, op, true, height + 1, value + 1 << k) union mulHelper(True, op, false, height + 1, value + 1 << k)
+      case True if k == 0 => // leaf in lowest level
         if (incomingEdge) {
-          val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
-          val s = new IntSet(shifted)
-          val intLikeSet = new IntLikeSet[I, T](bits_, s)
-          children plus intLikeSet
+          new IntLikeSet[I, T](bits_, new IntSet(CBDD(op))) // {op}
+        } else {
+          new IntLikeSet[I, T](bits_, new IntSet(CBDD(List.fill(64)(false)))) // {0}
+        }
+      case True =>
+       // println(s"True terminal not on lowest level: ${k} - Start: ${opI_ *smallestPossible}, End: ${opI_ * (value_ + int.fromInt((1 << k) - 1))}")
+        //val children = mulHelper(True, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) union mulHelper(True, opI, op, incomingEdge = false, height + 1, value_ + int.fromInt(1 << (k - 1))) // expand true node
+        val children = createStridedInterval(opI_ * smallestPossible,  opI_ * (value_ + int.fromInt((1 << k) - 1)), int.one)
+        if (incomingEdge) {
+          children plus opSingleton
         } else {
           children
         }
       case Node(s, uset) =>
-        val trueM = mulHelper(s, op, true, height + 1, value + 1 << k)
-        val falseM = mulHelper(uset, op, false, height + 1, value)
+        val trueM = mulHelper(s, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) // mult with "1" successor
+        val falseM = mulHelper(uset, opI, op, incomingEdge = false, height + 1, smallestPossible) // mult with "0" successor
+        val combined = trueM union falseM
         if (incomingEdge) {
-          val shifted = CBDD(op.drop(k) ++ List.fill(k)(false))
-          val s = new IntSet(shifted)
-          val intLikeSet = new IntLikeSet[I, T](bits_, s)
-          (trueM union falseM) plus intLikeSet
+          combined plus opSingleton
         } else {
-          trueM union falseM
+          combined union falseM
         }
     }
+  }
+  // uses scala sets for addition to a set
+  def mulHelper2(bdd: CBDD, op : I, incomingEdge : Boolean, height : Int, value : Int) : IntLikeSet[I, T] = {
+    val bits_ = boundedBits.bits
+    val k = bits_ - height
+    // println(s"Level: ${k} ${bdd}")
+    val ops = int.mkNumericOps(op)
+    def shift(x : I, k : Int) : I = k match {
+      case y if y <= 0 => int.one
+      case _ => int.times(int.fromInt(2), shift(x, k - 1))
+    }
+    val shiftedOpBdd = int.mkNumericOps(shift(op, k))
+
+    bdd match {
+      case False => IntLikeSet[I, T](bits_)
+      case True if k == 0 => // leaf in lowest level
+        if (incomingEdge) {
+          IntLikeSet[I, T](bits_, Set(castIT(bits, op))) // {op}
+        } else {
+          IntLikeSet[I, T](bits_, Set(castIT((bits, int.zero)))) // {0}
+        }
+      case True =>
+        // println(s"True terminal not on lowest level: ${k}")
+        val children = mulHelper2(True, op, incomingEdge = true, height + 1, value + 1 << k) union mulHelper2(True, op, incomingEdge = false, height + 1, value + 1 << k) // expand true node
+        if (incomingEdge) {
+          IntLikeSet[I, T](bits_, children.set.map(x => castIT(bits, shiftedOpBdd + x)))
+        } else {
+          children
+        }
+      case n@Node(s, uset) =>
+        val trueM = mulHelper2(s, op, incomingEdge = true, height + 1, value + 1 << k) // mult with "1" successor
+      val falseM = mulHelper2(uset, op, incomingEdge = false, height + 1, value) // mult with "0" successor
+      val combined = trueM union falseM
+        if (incomingEdge) {
+          IntLikeSet[I, T](bits_, combined.set.map(x => castIT(bits, shiftedOpBdd + x)))
+        } else {
+          combined union falseM
+        }
+    }
+  }
+
+  def mulNaive(that : IntLikeSet[I, T]) : IntLikeSet[I, T] = {
+    val result = for {
+      a <- set
+      b <- that.set
+    } yield castIT(bits, int.times(a, b))
+    IntLikeSet[I,T](bits, result)
+  }
+
+  def createStridedInterval(start : I, end : I, stride : I) : IntLikeSet[I,T] = {
+   // TODO: if (int.mkOrderingOps(start) > end) return createStridedInterval(end, start, stride)
+    val startBools = IntSet.toBitVector(start)
+    val endBools = IntSet.toBitVector(end)
+    val bdd = CBDD(startBools, endBools)
+    new IntLikeSet[I,T](bits, new IntSet(bdd))
   }
 
   def checkIntegrity() {
