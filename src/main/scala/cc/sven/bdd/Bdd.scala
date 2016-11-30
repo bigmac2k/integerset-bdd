@@ -203,6 +203,16 @@ object CBDD {
     }
     helper(integer)._2
   }
+  private def pred2(integer : List[Boolean]) : List[Boolean] = {
+    def helper(bs : List[Boolean]) : (Boolean, List[Boolean]) = bs match {
+      case List(x) => (x, List(!x))
+      case b :: bs => {
+        val (carry, rec) = helper(bs)
+        (carry || b, (b == carry) :: rec)
+      }
+    }
+    helper(integer)._2
+  }
   def plus(op1: CBDD, op2: CBDD, depth: Int): CBDDTuple = (op1, op2) match {
     case (False, _) => (False, False)
     case (x, False) => plus(False, x, depth)
@@ -240,7 +250,7 @@ object CBDD {
       addMerge(ff, ft, tf, tt)
     }
   }
-  // this is prob
+  // this is probably not correct
   def plusSingleton(op1: CBDD, op2: List[Boolean], depth: Int): CBDDTuple = (op1, op2) match {
     case (False, _) => (False, False)
     case (True, Nil) =>
@@ -248,29 +258,23 @@ object CBDD {
       (True, ov)
     case (True, _) => {
       val noOv = CBDD(op2, List.fill(depth)(true))
-      val ov = if(op2.forall(!_)) False else CBDD(List.fill(depth)(false), pred(op2)) // ???
+      val ov = if(op2.forall(!_)) False else CBDD(List.fill(depth)(false), pred2(op2)) // ???
       (noOv, ov)
     }
     case (Node(set, uset), x :: xs) => {
-
-      if (x) {
-        // tt + ft
-        val tt = plusSingleton(set, xs, depth - 1) // 1
-        val ft = plusSingleton(uset, xs, depth - 1) // 0
-
-        val trueOVNot = ft._1
+      val (tNoOv, tOv) = plusSingleton(set, xs, depth - 1) // (01,10)
+      val (fNoOv, fOv) = plusSingleton(uset, xs, depth - 1) // (00,01)
+      if (x) { // 1
+        val trueOVNot = fNoOv
         val falseOVNot = False
-        val trueOV = tt._2
-        val falseOV = tt._1 || ft._2
+        val trueOV = tOv
+        val falseOV = tNoOv || fOv
         (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
-      } else {
-        val tf = plusSingleton(set, xs, depth - 1) // 1
-        val ff = plusSingleton(uset, xs, depth - 1) // 0
-
-        val trueOVNot = tf._1 || ff._2
-        val falseOVNot = ff._1
+      } else { // 0
+        val trueOVNot = tNoOv || fOv
+        val falseOVNot = fNoOv
         val trueOV = False
-        val falseOV = tf._2
+        val falseOV = tOv
         (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
       }
     }
