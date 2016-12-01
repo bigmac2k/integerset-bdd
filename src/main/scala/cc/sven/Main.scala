@@ -20,8 +20,8 @@ object Main {
 
         val interval = ((1L << k_) + offset) until ((1L << (k_ + 1)) + offset)
         val longBits = implicitly[BoundedBits[Long]].bits
-        val bits_ = 32 min ((NBitLong.boundBits(bits) / 2) max 1)
-        println(bits_)
+        val bits_ = 64 // 32 min ((NBitLong.boundBits(bits) / 2) max 1)
+
         val aBounded = (a ++ interval).map(x => NBitLong.bound(x, bits_)) // TODO
 
         val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
@@ -123,9 +123,20 @@ object Main {
     }
     r.drop(l / 2)
   }
-  def main(args: Array[String]): Unit = {
-    test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
 
+  def printBdd(bdd: CBDD): String = {
+    def helper(bdd: CBDD, depth: Int) : String = "".padTo(depth*2,' ') + (bdd match {
+      case True =>  "True"
+      case False => "False"
+      case (Node(s, uset)) => s"o\n  ${helper(s, depth + 1)}\n  ${helper(uset, depth+1)}"
+    })
+    helper(bdd, 0)
+  }
+
+  def main(args: Array[String]): Unit = {
+    Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(200))
+    val test = construct(108, 54678, 35, 64)
+    val t = new IntSet[Long](test)
     println(s"Reference: ${durationRef} ns / ${durationRef / 1000000} ms")
     println(s"Own: ${duration} ns / ${duration / 1000000} ms")
     println(s"Own (scala set): ${duration2} ns / ${duration2 / 1000000} ms")
@@ -146,13 +157,14 @@ object Main {
     val interval = 1L << k until 1L << (k+1)
     var set = Set (-1L, -9223372036854775800L, -9223372036854775799L, -9223372036854775798L, -9223372036854775797L, -9223372036854775796L, -9223372036854775795L, 922337203685477579L, -9223372036854775793L, -9223372036854775808L, 9223372036854775807L, 4156699499875519015L, 203650941454430939L, 0L)//Set(-9223372036854775806L, -9223372036854775805L) // 4L,5L,6L,7L, 8,32,33, 34,35,36,37,38,39,40,41,42,43,44,45,46,47) // generateSet()
     // set ++= interval
-    val bddSet = (IntLikeSet[Long, NBitLong](bits) /: set) ((acc, x) => acc + NBitLong(bits, x))
+    val bddSet = (IntLikeSet[Long, NBitLong](bits) /: set) ((acc, x) => acc + NBitLong(bits, NBitLong.bound(x, bits)))
    // val (normal, ov) = CBDD.plusSingleton(bddSet.set.cbdd, IntSet.toBitVector(8L),64)
    // val result = new IntSet[Long](normal || ov)
     val r = bddSet.plusSingleton(5L).set.toList.sorted
     val op = NBitLong.bound(3L, bits)
     val ref = set.map(NBitLong.bound(_, bits)).map(_*op)
     val res = bddSet.mulSingleton4(NBitLong(bits, op))
+    println(res)
     val castIT = implicitly[Castable[(Int, Long), NBitLong]]
     val correct = ref.map((x:Long)=>castIT((bits, x))).forall(res.contains)
 
@@ -160,7 +172,31 @@ object Main {
 
   }
 
-
+  def construct(start: Long, end: Long, stride : Long, depth : Int) : CBDD = {
+    val maxCount = (end - start) / stride + 1
+    def helper(num : Long, d : Int, countLeft : Long) : (CBDD, Long, Long) = {
+      if (countLeft <= 0) return (False, num, 0)
+      val count = if (d >= 64) Long.MaxValue else 1L << (d - 1) // max number leaves in subtree
+      if (d == 0) return (True, stride - 1, 1)
+      if (num < count) { // at least one leaf in right subtree
+        val (bddF, leftF, countF) = helper(num, d - 1, countLeft)
+        if (leftF < count && countF < countLeft) { // go into left subtree
+          val (bddT, leftT, countT) = helper(leftF, d - 1, countLeft - countF)
+          (Node(bddT, bddF), leftT, countF + countT)
+        } else {
+          (Node(False, bddF), leftF - count, countF)
+        }
+      } else if (num - count < count) {
+        val num_ = num - count
+        val (bddT, leftT, countT) = helper(num_, d - 1, countLeft)
+        (Node(bddT, False), leftT, countT)
+      } else {
+        (False, num - 2 * count, 0)
+      }
+    }
+    val (res, left, c) = helper(start, depth, maxCount)
+    res
+  }
 
   def generateSet() = {
     val r = scala.util.Random

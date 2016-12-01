@@ -136,7 +136,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     (fromBWCBDD(norm), fromBWCBDD(ov))
   }
   def plusSingleton(op: I): IntLikeSet[I,T] = {
-    val (norm, ov) = CBDD.plusSingleton(set.cbdd, IntSet.toBitVector(op), bits)
+    val (norm, ov) = CBDD.plusSingleton(getBWCBDD, IntSet.toBitVector(op).drop(boundedBits.bits - bits), bits)
     fromBWCBDD(norm) | fromBWCBDD(ov)
   }
   def negate = fromBWCBDD(CBDD.negate(bits, getBWCBDD))
@@ -341,15 +341,29 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   def mulSingleton4(op : T) : IntLikeSet[I, T] = {
     val (opBits, opI) = castTI(op)
     assert(opBits == bits)
-    val bits_ = 2 * bits
+    val bits_ = 64
     // println(s"$set * $op")
-    val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits).reverse.padTo(bits_, false).reverse
+    val x_ = IntSet.toBitVector(opI).drop(boundedBits.bits - bits_)
+    val opBools = x_.reverse.padTo(bits_, false).reverse
 
     //only positive for now...
     //require(!opBools.head)
 
     fromBWCBDD(mulHelper4(set.cbdd, opI, opBools, incomingEdge = false, 0, List.fill(opBools.length)(false)))
     // ???
+  }
+
+  def signExtend(bdd: CBDD, depth : Int) : CBDD =  {
+    def helper(h : Int, t : Boolean, b : CBDD) : CBDD = (h,t) match {
+      case (0, _) => b
+      case (_, true) => Node(helper(h - 1, t, b), False)
+      case (_, false) => Node(False, helper(h - 1, t, b))
+    }
+    bdd match {
+      case False => False
+      case True => True
+      case Node(s, uset) => Node(helper(depth - bdd.depth, true, s), helper(depth - bdd.depth, false, uset))
+    }
   }
 
   def mulHelper3(bdd: CBDD, opI : I, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : I) : CBDD = {
@@ -366,18 +380,18 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
         if (incomingEdge) {
             CBDD(op) // {op}
         } else {
-            CBDD(List.fill(64)(false)) // {0}
+            CBDD(List.fill(bits_)(false)) // {0}
         }
         case True =>
-        // println(s"True terminal not on lowest level: ${k} - Start: ${opI_ *smallestPossible}, End: ${opI_ * (value_ + int.fromInt((1 << k) - 1))}")
-        val children = mulHelper3(True, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) || mulHelper3(True, opI, op, incomingEdge = false, height + 1, value_ + int.fromInt(1 << (k - 1))) // expand true node
-          //val children = createStridedInterval(opI_ * smallestPossible,  opI_ * (value_ + int.fromInt((1 << k) - 1)), int.one)
-        if (incomingEdge) {
-            val (norm, ov) = CBDD.plus(children, shiftedOpBdd, bits_)
-            norm || ov
-        } else {
-            children
-        }
+          // println(s"True terminal not on lowest level: ${k} - Start: ${opI_ *smallestPossible}, End: ${opI_ * (value_ + int.fromInt((1 << k) - 1))}")
+          val children = mulHelper3(True, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) || mulHelper3(True, opI, op, incomingEdge = false, height + 1, value_ + int.fromInt(1 << (k - 1))) // expand true node
+            //val children = createStridedInterval(opI_ * smallestPossible,  opI_ * (value_ + int.fromInt((1 << k) - 1)), int.one)
+          if (incomingEdge) {
+              val (norm, ov) = CBDD.plus(children, shiftedOpBdd, bits_)
+              norm || ov
+          } else {
+              children
+          }
         case Node(s, uset) =>
           val trueM = mulHelper3(s, opI, op, incomingEdge = true, height + 1, value_ + int.fromInt(1 << (k - 1))) // mult with "1" successor
           val falseM = mulHelper3(uset, opI, op, incomingEdge = false, height + 1, smallestPossible) // mult with "0" successor
@@ -393,7 +407,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 
   def mulHelper4(bdd: CBDD, opI : I, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : List[Boolean]) : CBDD = {
 
-    val bits_ = 2 * bits
+    val bits_ = 64
     val k = bits_ - height
     // println(s"Level: ${k} ${bdd}")
     lazy val shiftedOp = op.drop(k) ++ List.fill(k)(false)
@@ -404,7 +418,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
         if (incomingEdge) {
           CBDD(op) // {op}
         } else {
-          CBDD(List.fill(64)(false)) // {0}
+          CBDD(List.fill(bits_)(false)) // {0}
         }
       case True =>
         // println(s"True terminal not on lowest level: ${k} - Start: ${opI_ *smallestPossible}, End: ${opI_ * (value_ + int.fromInt((1 << k) - 1))}")
@@ -412,7 +426,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
  //       val start = int.zero // int.times(IntSet.fromBitVector(smallestPossible), opI)
 //        val end = int.times(IntSet.fromBitVector(List.fill(bits_ - k)(false) ++ List.fill(k)(true)), opI) // 2^k-1
        // println(start, end)
-        val children = stridedBdd(List.fill(bits_)(false), mulBinary(op, List.fill(bits_ - k)(false) ++ List.fill(k)(true)), op)
+        //val children = stridedBdd(List.fill(bits_)(false), mulBinary(op, List.fill(bits_ - k)(false) ++ List.fill(k)(true)), op)
+        val children = construct(0L, int.toLong(IntSet.fromBitVector(mulBinary(op, List.fill(bits_ - k)(false) ++ List.fill(k)(true)))), int.toLong(opI), bits_)
         //val children = createStridedInterval(opI_ * smallestPossible,  opI_ * (value_ + int.fromInt((1 << k) - 1)), int.one)
         if (incomingEdge) {
           val (norm, ov) = CBDD.plusSingleton(children, shiftedOp, bits_)
@@ -442,6 +457,31 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     helper(bdd, 0)
   }
 
+  def construct(start: Long, end: Long, stride : Long, depth : Int) : CBDD = {
+    val maxCount = (end - start) / stride + 1
+    def helper(num : Long, d : Int, countLeft : Long) : (CBDD, Long, Long) = {
+      if (countLeft <= 0) return (False, num, 0)
+      val count = if (d >= 64) Long.MaxValue else 1L << (d - 1) // max number leaves in subtree
+      if (d == 0) return (True, stride - 1, 1)
+      if (num < count) { // at least one leaf in right subtree
+      val (bddF, leftF, countF) = helper(num, d - 1, countLeft)
+        if (leftF < count && countF < countLeft) { // go into left subtree
+        val (bddT, leftT, countT) = helper(leftF, d - 1, countLeft - countF)
+          (Node(bddT, bddF), leftT, countF + countT)
+        } else {
+          (Node(False, bddF), leftF - count, countF)
+        }
+      } else if (num - count < count) {
+        val num_ = num - count
+        val (bddT, leftT, countT) = helper(num_, d - 1, countLeft)
+        (Node(bddT, False), leftT, countT)
+      } else {
+        (False, num - 2 * count, 0)
+      }
+    }
+    val (res, left, c) = helper(start, depth, maxCount)
+    res
+  }
 
   def mulBinary(x : List[Boolean], y : List[Boolean]) : List[Boolean] = {
     def add(x : List[Boolean], y : List[Boolean]) : (Boolean, List[Boolean]) = (x,y) match {
