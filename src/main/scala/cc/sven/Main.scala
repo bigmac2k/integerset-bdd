@@ -14,23 +14,25 @@ object Main {
   var durationRef = 1L
   var durationNaive = 1L
   val test = forAll{
-    (a : Set[Long], b : Int,k : Int, offset : Long, bits: Int) =>
+    (a : Set[Int], b : Int, k : Int, offset : Int, offset2 : Int, bits: Int) =>
       (b >0) ==> {
+       // println("Test")
         val k_ = (k.abs % 10) max 1
 
-        val interval = ((1L << k_) + offset) until ((1L << (k_ + 1)) + offset)
+        val interval = ((1 << k_) + offset) until ((1 << (k_ + 1)) + offset)
+        val interval2 = ((1 << k_) + offset2) until ((1 << (k_ + 1)) + offset2)
         val longBits = implicitly[BoundedBits[Long]].bits
         val bits_ = 64 // 32 min ((NBitLong.boundBits(bits) / 2) max 1)
 
-        val aBounded = (a ++ interval).map(x => NBitLong.bound(x, bits_)) // TODO
+        val aBounded = (a ++ interval ++ interval2).map(x => NBitLong.bound(x.toLong, bits_)) // TODO
 
         val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
         val b_ = NBitLong.bound(b, bits_)
         var start = System.nanoTime()
-        val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 * x._2)
+        val ref = cartesianProduct(aBounded, Set(b_.toLong)).map((x) => x._1 * x._2)
         durationRef += System.nanoTime() - start
         //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
-        /*
+
         start = System.nanoTime()
         //val us = a_.mulSingleton(NBitLong(bits_, b))
         duration += System.nanoTime() - start
@@ -42,23 +44,26 @@ object Main {
         start = System.nanoTime()
         val us3 = a_.mulSingleton3(NBitLong(bits_, b))
         duration3 += System.nanoTime() - start
-        */
+
         start = System.nanoTime()
-        val us4 = a_.mulSingleton4(NBitLong(bits_, b))
+        val us4 = a_.mulSingleton4(NBitLong(bits_, b_.toLong))
         duration4 += System.nanoTime() - start
 
         start = System.nanoTime()
-        val ns = a_.mulNaive(IntLikeSet[Long, NBitLong](bits_) + NBitLong(bits_, b))
+        val ns = a_.mulNaive(IntLikeSet[Long, NBitLong](bits_) + NBitLong(bits_, b_.toLong))
         durationNaive += System.nanoTime() - start
 
         val castIT = implicitly[Castable[(Int, Long), NBitLong]]
         val ref_ = ref.map((x: Long) => castIT((bits_, x)))
         val res = ref_.forall(us4.contains) // ref_.forall(us3.contains) && ref_.forall(us.contains) && ref_.forall(us2.contains) &&
         //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4 + ", ref: " + ref_ + ", result: " + res)
-        if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4 + ", ref: " + ref_ + ", result: " + res)
+        if(!res) println("inputa_: " + a_.set + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4.set + ", ref: " + ref_ + ", result: " + res)
+
+        c = c + 1
         res
       }
   }
+  var c = 0
 
   val testSingleton = forAll{
     (a : Set[Long], b : Long, k : Int, offset : Long) =>
@@ -134,9 +139,9 @@ object Main {
   }
 
   def main(args: Array[String]): Unit = {
-    Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(200))
-    val test = construct(108, 54678, 35, 64)
-    val t = new IntSet[Long](test)
+    Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(3000))
+    val test = construct(-7, 3, 3, 4)
+    // val t = new IntSet[Long](test)
     println(s"Reference: ${durationRef} ns / ${durationRef / 1000000} ms")
     println(s"Own: ${duration} ns / ${duration / 1000000} ms")
     println(s"Own (scala set): ${duration2} ns / ${duration2 / 1000000} ms")
@@ -155,13 +160,13 @@ object Main {
     val bits = 64
     val k = 4
     val interval = 1L << k until 1L << (k+1)
-    var set = Set (-1L, -9223372036854775800L, -9223372036854775799L, -9223372036854775798L, -9223372036854775797L, -9223372036854775796L, -9223372036854775795L, 922337203685477579L, -9223372036854775793L, -9223372036854775808L, 9223372036854775807L, 4156699499875519015L, 203650941454430939L, 0L)//Set(-9223372036854775806L, -9223372036854775805L) // 4L,5L,6L,7L, 8,32,33, 34,35,36,37,38,39,40,41,42,43,44,45,46,47) // generateSet()
-    // set ++= interval
+    var set = Set (20L, 21L, 16L, 17L, 18L, 19L, 0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L)//Set(-9223372036854775806L, -9223372036854775805L) // 4L,5L,6L,7L, 8,32,33, 34,35,36,37,38,39,40,41,42,43,44,45,46,47) // generateSet()
+    //set ++= interval
     val bddSet = (IntLikeSet[Long, NBitLong](bits) /: set) ((acc, x) => acc + NBitLong(bits, NBitLong.bound(x, bits)))
    // val (normal, ov) = CBDD.plusSingleton(bddSet.set.cbdd, IntSet.toBitVector(8L),64)
    // val result = new IntSet[Long](normal || ov)
-    val r = bddSet.plusSingleton(5L).set.toList.sorted
-    val op = NBitLong.bound(3L, bits)
+//    val r = bddSet.plusSingleton(5L).set.toList.sorted
+    val op = NBitLong.bound(4034120, bits)
     val ref = set.map(NBitLong.bound(_, bits)).map(_*op)
     val res = bddSet.mulSingleton4(NBitLong(bits, op))
     println(res)
@@ -173,11 +178,12 @@ object Main {
   }
 
   def construct(start: Long, end: Long, stride : Long, depth : Int) : CBDD = {
-    val maxCount = (end - start) / stride + 1
+    val stride_ = stride.abs
+
     def helper(num : Long, d : Int, countLeft : Long) : (CBDD, Long, Long) = {
       if (countLeft <= 0) return (False, num, 0)
       val count = if (d >= 64) Long.MaxValue else 1L << (d - 1) // max number leaves in subtree
-      if (d == 0) return (True, stride - 1, 1)
+      if (d == 0) return (True, stride_ - 1, 1)
       if (num < count) { // at least one leaf in right subtree
         val (bddF, leftF, countF) = helper(num, d - 1, countLeft)
         if (leftF < count && countF < countLeft) { // go into left subtree
@@ -194,8 +200,22 @@ object Main {
         (False, num - 2 * count, 0)
       }
     }
-    val (res, left, c) = helper(start, depth, maxCount)
-    res
+    val maxCount = (end - start).abs / stride_ + 1
+    val start_ = Math.min(start, end)
+    if (start < 0) {
+      val start__ = start_ + (1L << depth - 1) // not in right subtree
+      val (res, left, c) = helper(start__, depth - 1, maxCount)
+      if (c < maxCount) {
+        val (res2, left2, c2) = helper(left, depth - 1, maxCount - c)
+        Node(res, res2)
+      } else {
+        Node(res, False)
+      }
+
+    } else {
+      val (res, left, c) = helper(start_, depth, maxCount)
+      res
+    }
   }
 
   def generateSet() = {

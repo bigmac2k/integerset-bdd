@@ -251,31 +251,35 @@ object CBDD {
     }
   }
   // this is probably not correct
-  def plusSingleton(op1: CBDD, op2: List[Boolean], depth: Int): CBDDTuple = (op1, op2) match {
-    case (False, _) => (False, False)
-    case (True, Nil) =>
-      val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
-      (True, ov)
-    case (True, _) => {
-      val noOv = CBDD(op2, List.fill(depth)(true))
-      val ov = if(op2.forall(!_)) False else CBDD(List.fill(depth)(false), pred2(op2)) // ???
-      (noOv, ov)
-    }
-    case (Node(set, uset), x :: xs) => {
-      val (tNoOv, tOv) = plusSingleton(set, xs, depth - 1) // (01,10)
-      val (fNoOv, fOv) = plusSingleton(uset, xs, depth - 1) // (00,01)
-      if (x) { // 1
+  def plusSingleton(op1: CBDD, op2: List[Boolean], depth: Int): CBDDTuple = {
+
+    (op1, op2) match {
+      case (False, _) => (False, False)
+      case (True, Nil) =>
+        val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
+        (True, ov)
+      case (True, _) => {
+        val noOv = CBDD(op2, List.fill(depth)(true))
+        val ov = if(op2.forall(!_)) False else CBDD(List.fill(depth)(false), pred2(op2)) // ???
+        (noOv, ov)
+      }
+      case (Node(set, uset), x :: xs) => {
+//        require(op1.depth == op2.length, s"Operands aren't of equal length: ${op1.depth} vs ${op2.length}")
+        val (tNoOv, tOv) = plusSingleton(set, xs, depth - 1) // (01,10)
+        val (fNoOv, fOv) = plusSingleton(uset, xs, depth - 1) // (00,01)
+        if (x) { // 1
         val trueOVNot = fNoOv
-        val falseOVNot = False
-        val trueOV = tOv
-        val falseOV = tNoOv || fOv
-        (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
-      } else { // 0
+          val falseOVNot = False
+          val trueOV = tOv
+          val falseOV = tNoOv || fOv
+          (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
+        } else { // 0
         val trueOVNot = tNoOv || fOv
-        val falseOVNot = fNoOv
-        val trueOV = False
-        val falseOV = tOv
-        (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
+          val falseOVNot = fNoOv
+          val trueOV = False
+          val falseOV = tOv
+          (Node(trueOVNot, falseOVNot), Node(trueOV, falseOV))
+        }
       }
     }
   }

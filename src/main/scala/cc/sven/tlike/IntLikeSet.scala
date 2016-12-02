@@ -89,7 +89,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   //def sizeBigInt = set.cbdd.truePaths.map((x) => BigInt(1l << (boundedBits.bits - x.length))).sum
   def sizeBigInt: BigInt = {
     import scala.math.BigInt._
-    assert(set.cbdd.depth <= boundedBits.bits)
+    assert(set.cbdd.depth <= boundedBits.bits, s"${set.cbdd.depth} vs ${boundedBits.bits}")
     if(set.cbdd.depth > 64) //we use long
     //could be optimized by only going through cbdd.depth - 64 upper part.
       set.cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
@@ -341,15 +341,16 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   def mulSingleton4(op : T) : IntLikeSet[I, T] = {
     val (opBits, opI) = castTI(op)
     assert(opBits == bits)
-    val bits_ = 64
+    val bits_ = boundedBits.bits
     // println(s"$set * $op")
     val x_ = IntSet.toBitVector(opI).drop(boundedBits.bits - bits_)
-    val opBools = x_.reverse.padTo(bits_, false).reverse
+    val opBools = x_.reverse.padTo(boundedBits.bits, false).reverse
 
     //only positive for now...
     //require(!opBools.head)
 
-    fromBWCBDD(mulHelper4(set.cbdd, opI, opBools, incomingEdge = false, 0, List.fill(opBools.length)(false)))
+    val res = fromBWCBDD(mulHelper4(set.cbdd, opI, opBools, incomingEdge = false, 0, List.fill(opBools.length)(false)))
+    res
     // ???
   }
 
@@ -407,7 +408,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 
   def mulHelper4(bdd: CBDD, opI : I, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : List[Boolean]) : CBDD = {
 
-    val bits_ = 64
+    val bits_ = boundedBits.bits
     val k = bits_ - height
     // println(s"Level: ${k} ${bdd}")
     lazy val shiftedOp = op.drop(k) ++ List.fill(k)(false)
@@ -427,15 +428,25 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 //        val end = int.times(IntSet.fromBitVector(List.fill(bits_ - k)(false) ++ List.fill(k)(true)), opI) // 2^k-1
        // println(start, end)
         //val children = stridedBdd(List.fill(bits_)(false), mulBinary(op, List.fill(bits_ - k)(false) ++ List.fill(k)(true)), op)
-        val children = construct(0L, int.toLong(IntSet.fromBitVector(mulBinary(op, List.fill(bits_ - k)(false) ++ List.fill(k)(true)))), int.toLong(opI), bits_)
+
         //val children = createStridedInterval(opI_ * smallestPossible,  opI_ * (value_ + int.fromInt((1 << k) - 1)), int.one)
-        if (incomingEdge) {
-          val (norm, ov) = CBDD.plusSingleton(children, shiftedOp, bits_)
-          norm || ov
+        /*if (incomingEdge) {
+          // val (norm, ov) = CBDD.plusSingleton(children, shiftedOp, bits_)
+          //  norm || ov
+
           //children
         } else {
-          children
+          construct(int.toLong(IntSet.fromBitVector(mulBinary(op, smallestPossible))), 1L << k, int.toLong(opI), bits_)
+        } */
+        val opNegative = op.head
+        val numNegative = smallestPossible.head
+        val result = if (incomingEdge) {
+          construct(int.toLong(IntSet.fromBitVector(shiftedOp)), 1L << k, int.toLong(opI), bits_)
+
+        } else {
+          construct(0, 1L << k, int.toLong(opI), bits_)
         }
+        result
       case Node(s, uset) =>
         val trueM = mulHelper4(s, opI, op, incomingEdge = true, height + 1, smallestPossible.updated(height,true)) // mult with "1" successor
         val falseM = mulHelper4(uset, opI, op, incomingEdge = false, height + 1, smallestPossible) // mult with "0" successor
@@ -457,12 +468,13 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     helper(bdd, 0)
   }
 
-  def construct(start: Long, end: Long, stride : Long, depth : Int) : CBDD = {
-    val maxCount = (end - start) / stride + 1
+  def construct(start: Long, count: Long, stride : Long, depth : Int) : CBDD = {
+    val stride_ = stride.abs
+
     def helper(num : Long, d : Int, countLeft : Long) : (CBDD, Long, Long) = {
       if (countLeft <= 0) return (False, num, 0)
       val count = if (d >= 64) Long.MaxValue else 1L << (d - 1) // max number leaves in subtree
-      if (d == 0) return (True, stride - 1, 1)
+      if (d == 0) return (True, stride_ - 1, 1)
       if (num < count) { // at least one leaf in right subtree
       val (bddF, leftF, countF) = helper(num, d - 1, countLeft)
         if (leftF < count && countF < countLeft) { // go into left subtree
@@ -479,8 +491,22 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
         (False, num - 2 * count, 0)
       }
     }
-    val (res, left, c) = helper(start, depth, maxCount)
-    res
+    val maxCount = count // (end - start).abs / stride_ + 1
+    val start_ = start // Math.min(start, end)
+    if (start < 0) {
+      val start__ = start_ + (1L << depth - 2) + (1L << depth - 2) // not in right subtree. TODO wrap around
+      val (res, left, c) = helper(start__, depth - 1, maxCount)
+      if (c < maxCount) {
+        val (res2, left2, c2) = helper(left, depth - 1, maxCount - c)
+        Node(res, res2)
+      } else {
+        Node(res, False)
+      }
+
+    } else {
+      val (res, left, c) = helper(start_, depth, maxCount)
+      res
+    }
   }
 
   def mulBinary(x : List[Boolean], y : List[Boolean]) : List[Boolean] = {
