@@ -1,8 +1,10 @@
 package cc.sven
+import java.io.{BufferedWriter, File, FileWriter}
+
 import cc.sven.bdd.{CBDD, False, Node, True}
 import cc.sven.bounded.BoundedBits
 import cc.sven.intset.IntSet
-import cc.sven.tlike.{IntLikeSet, _}
+import cc.sven.tlike.{IntLikeSet, NBitLong, _}
 import org.scalacheck.Prop.{BooleanOperators, forAll}
 import org.scalacheck.Test
 
@@ -104,6 +106,40 @@ object Main {
       res
   }
 
+  var stridedNaive = 1L
+  var stridedOwn = 1L
+  val testStridedInterval = forAll {
+    (start: Int, count: Int, stride: Int) =>
+
+      val stride_ = stride.abs.toLong max 1L
+      val start_ = (Long.MaxValue - 1 min start.toLong)
+      val count_ = (Long.MaxValue / stride_ * 2) % 100000
+      (count_ > 0) ==> {
+        val bits = 64
+        println("start: " + start_ + ", count: " + count_ + ", stride: " + stride_)
+        val expected = for (i <- 0L to (count_ - 1)) yield start_ + i * stride_
+        val expected_ = expected.map(x => NBitLong(bits, x)).toSet
+
+        var start = System.nanoTime()
+        println("Started own")
+        val resBdd = CBDD.constructStridedInterval(start_, count_, stride_, bits)
+
+        val us = new IntLikeSet[Long, NBitLong](bits, new IntSet[Long](resBdd))
+        println("Finished own")
+        stridedOwn += System.nanoTime() - start
+
+        start = System.nanoTime()
+        println("Started naive")
+       // val a_ = IntSet(expected.toSet)
+        println("Finished naive")
+        stridedNaive += System.nanoTime() - start
+
+        val res = expected_.forall(us.contains) && us.forall(expected_.contains)
+        if (!res) println("Wrong: start: " + start_ + ", count: " + count_ + ", stride: " + stride_)
+        res
+      }
+  }
+
   def cartesianProduct[A, B](as : Set[A], bs : Set[B]) : Set[(A, B)] = for{
     a <- as
     b <- bs
@@ -138,9 +174,52 @@ object Main {
     helper(bdd, 0)
   }
 
+  def benchmark(filename: String) = {
+    val file = new File(filename)
+    val bw = new BufferedWriter(new FileWriter(file))
+
+    val r = scala.util.Random
+
+    val end = 30
+    val loopCount = 500
+    val start = 0 //r.nextInt()
+    for (n <- 1 to(end, 1)) {
+
+      val n_ = 1 << n
+      println(n_)
+      var duration = 0L
+      var durationNaive = 0L
+      for (i <- 1 to loopCount) {
+        val start = r.nextInt()
+        var s = System.nanoTime()
+
+        val c = CBDD.constructStridedInterval(start, 10000, n_, 64)
+        duration += System.nanoTime() - s
+      /*  s = System.nanoTime()
+        val expected = (for (i <- 0L to (n - 1)) yield start + i * stride).toSet
+        val expected_ = expected.toSet
+
+
+        val a_ = IntSet(expected)
+
+        durationNaive += System.nanoTime() - s
+
+        println(durationNaive)*/
+      }
+      bw.write(s"$n;${duration.toDouble/loopCount};${durationNaive.toDouble/loopCount}\n")
+      bw.flush()
+    }
+    bw.close()
+  }
+
   def main(args: Array[String]): Unit = {
-    Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(3000))
-    val test = construct(-7, 3, 3, 4)
+   // benchmark("benchmark.csv")
+    Main.testStridedInterval.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(250))
+
+    println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
+    println(s"Own: ${stridedOwn} ns / ${stridedOwn / 1000000} ms (${stridedOwn.toDouble / stridedNaive}x ")
+
+    val test = CBDD.constructStridedInterval(3, 6, 5, 64)
     // val t = new IntSet[Long](test)
     println(s"Reference: ${durationRef} ns / ${durationRef / 1000000} ms")
     println(s"Own: ${duration} ns / ${duration / 1000000} ms")
@@ -168,10 +247,10 @@ object Main {
 //    val r = bddSet.plusSingleton(5L).set.toList.sorted
     val op = NBitLong.bound(4034120, bits)
     val ref = set.map(NBitLong.bound(_, bits)).map(_*op)
-    val res = bddSet.mulSingleton4(NBitLong(bits, op))
-    println(res)
+    //val res = bddSet.mulSingleton4(NBitLong(bits, op))
+    //println(res)
     val castIT = implicitly[Castable[(Int, Long), NBitLong]]
-    val correct = ref.map((x:Long)=>castIT((bits, x))).forall(res.contains)
+    //val correct = ref.map((x:Long)=>castIT((bits, x))).forall(res.contains)
 
     val x = bddSet.createStridedInterval(0, 7, 2)
 

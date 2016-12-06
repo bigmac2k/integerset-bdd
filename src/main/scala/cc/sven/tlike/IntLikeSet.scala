@@ -438,13 +438,11 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
         } else {
           construct(int.toLong(IntSet.fromBitVector(mulBinary(op, smallestPossible))), 1L << k, int.toLong(opI), bits_)
         } */
-        val opNegative = op.head
-        val numNegative = smallestPossible.head
         val result = if (incomingEdge) {
-          construct(int.toLong(IntSet.fromBitVector(shiftedOp)), 1L << k, int.toLong(opI), bits_)
+          CBDD.constructStridedInterval(int.toLong(IntSet.fromBitVector(shiftedOp)), 1L << k, int.toLong(opI), bits_)
 
         } else {
-          construct(0, 1L << k, int.toLong(opI), bits_)
+          CBDD.constructStridedInterval(0, 1L << k, int.toLong(opI), bits_)
         }
         result
       case Node(s, uset) =>
@@ -468,46 +466,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     helper(bdd, 0)
   }
 
-  def construct(start: Long, count: Long, stride : Long, depth : Int) : CBDD = {
-    val stride_ = stride.abs
 
-    def helper(num : Long, d : Int, countLeft : Long) : (CBDD, Long, Long) = {
-      if (countLeft <= 0) return (False, num, 0)
-      val count = if (d >= 64) Long.MaxValue else 1L << (d - 1) // max number leaves in subtree
-      if (d == 0) return (True, stride_ - 1, 1)
-      if (num < count) { // at least one leaf in right subtree
-      val (bddF, leftF, countF) = helper(num, d - 1, countLeft)
-        if (leftF < count && countF < countLeft) { // go into left subtree
-        val (bddT, leftT, countT) = helper(leftF, d - 1, countLeft - countF)
-          (Node(bddT, bddF), leftT, countF + countT)
-        } else {
-          (Node(False, bddF), leftF - count, countF)
-        }
-      } else if (num - count < count) {
-        val num_ = num - count
-        val (bddT, leftT, countT) = helper(num_, d - 1, countLeft)
-        (Node(bddT, False), leftT, countT)
-      } else {
-        (False, num - 2 * count, 0)
-      }
-    }
-    val maxCount = count // (end - start).abs / stride_ + 1
-    val start_ = start // Math.min(start, end)
-    if (start < 0) {
-      val start__ = start_ + (1L << depth - 2) + (1L << depth - 2) // not in right subtree. TODO wrap around
-      val (res, left, c) = helper(start__, depth - 1, maxCount)
-      if (c < maxCount) {
-        val (res2, left2, c2) = helper(left, depth - 1, maxCount - c)
-        Node(res, res2)
-      } else {
-        Node(res, False)
-      }
-
-    } else {
-      val (res, left, c) = helper(start_, depth, maxCount)
-      res
-    }
-  }
 
   def mulBinary(x : List[Boolean], y : List[Boolean]) : List[Boolean] = {
     def add(x : List[Boolean], y : List[Boolean]) : (Boolean, List[Boolean]) = (x,y) match {
