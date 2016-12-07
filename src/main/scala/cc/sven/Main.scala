@@ -1,5 +1,6 @@
 package cc.sven
 import java.io.{BufferedWriter, File, FileWriter}
+import java.nio.file.Paths
 
 import cc.sven.bdd.{CBDD, False, Node, True}
 import cc.sven.bounded.BoundedBits
@@ -7,6 +8,8 @@ import cc.sven.intset.IntSet
 import cc.sven.tlike.{IntLikeSet, NBitLong, _}
 import org.scalacheck.Prop.{BooleanOperators, forAll}
 import org.scalacheck.Test
+
+import scala.collection.AbstractSeq
 
 object Main {
   var duration = 1L
@@ -174,26 +177,94 @@ object Main {
     helper(bdd, 0)
   }
 
+  def benchmarkSuiteHeights(folder: String, start: Long, lengths: AbstractSeq[Long], strides: AbstractSeq[Long], heights: Range): Unit = {
+    for (stride <- strides) {
+      for (count <- lengths) {
+        val p = Paths.get(folder)
+        val file = p.resolve(s"benchmark_start_${start}_length_${count}_stride_${stride}_height_from_${heights.start}_to_${heights.end}.csv").toFile
+        val bw = new BufferedWriter(new FileWriter(file))
+        for (height <- heights) {
+          println(s"Start: $start, Stride: $stride, Length: $count")
+          val (tree, rcount) = constructStridedInterval(start, count, stride, height)
+          bw.write(s"$height;$rcount\n")
+          bw.flush()
+        }
+        bw.close()
+      }
+    }
+  }
+
+  def benchmarkSuiteStarts(folder: String, starts: IndexedSeq[Long], lengths: AbstractSeq[Long], strides: AbstractSeq[Long], height: Int): Unit = {
+    for (stride <- strides) {
+      for (count <- lengths) {
+        val p = Paths.get(folder)
+        val file = p.resolve(s"benchmark_length_${count}_stride_${stride}_start_from_${starts.min}_to_${starts.max}.csv").toFile
+        val bw = new BufferedWriter(new FileWriter(file))
+        for (start <- starts) {
+          println(s"Start: $start, Stride: $stride, Length: $count")
+          val (tree, rcount) = constructStridedInterval(start, count, stride, height)
+          bw.write(s"$start;$rcount\n")
+          bw.flush()
+        }
+        bw.close()
+      }
+    }
+  }
+
+  def benchmarkSuiteLengths(folder: String, start: Long, lengths: Range, strides: AbstractSeq[Long], height: Int): Unit = {
+    for (stride <- strides) {
+      val p = Paths.get(folder)
+      val file = p.resolve(s"benchmark_start_${start}_stride_${stride}_length_from_${lengths.start}_to_${lengths.end}_step_${lengths.step}.csv").toFile
+      val bw = new BufferedWriter(new FileWriter(file))
+      for (count <- lengths) {
+        println(s"Stride: $stride, Length: $count")
+        val (tree, rcount) = constructStridedInterval(start, count, stride, height)
+        bw.write(s"$count;$rcount\n")
+        bw.flush()
+      }
+      bw.close()
+    }
+  }
+
+  def benchmarkSuiteStrides(folder: String, start: Long, lengths: AbstractSeq[Long], strides: IndexedSeq[Long], height: Int): Unit = {
+    for (length <- lengths) {
+      val p = Paths.get(folder)
+      val file = p.resolve(s"benchmark_start_${start}_length_${length}_stride_from_${strides.min}_to_${strides.max}.csv").toFile
+      val bw = new BufferedWriter(new FileWriter(file))
+
+
+      for (stride <- strides) {
+        println(s"Stride: $stride, Length: $length")
+        val (tree, rcount) = constructStridedInterval(start, length, stride, height)
+        bw.write(s"$stride;$rcount\n")
+        bw.flush()
+      }
+      bw.close()
+    }
+  }
+
   def benchmark(filename: String) = {
     val file = new File(filename)
     val bw = new BufferedWriter(new FileWriter(file))
 
     val r = scala.util.Random
-
-    val end = 30
+    val x = 1 to 64
+    x
+    val end = 64
     val loopCount = 500
-    val start = 0 //r.nextInt()
-    for (n <- 1 to(end, 1)) {
+    val start = r.nextInt() / 2
+    val stride = 1L << 10
+    for (n <- 32 to(end, 1)) {
 
-      val n_ = 1 << n
+      val n_ = n //1 << n
       println(n_)
       var duration = 0L
       var durationNaive = 0L
-      for (i <- 1 to loopCount) {
-        val start = r.nextInt()
+      //for (i <- 1 to loopCount) {
+        //val start = r.nextInt()
         var s = System.nanoTime()
 
-        val c = CBDD.constructStridedInterval(start, 10000, n_, 64)
+        val (tree, count) = constructStridedInterval(start, 10000, stride, n_)
         duration += System.nanoTime() - s
       /*  s = System.nanoTime()
         val expected = (for (i <- 0L to (n - 1)) yield start + i * stride).toSet
@@ -205,21 +276,24 @@ object Main {
         durationNaive += System.nanoTime() - s
 
         println(durationNaive)*/
-      }
-      bw.write(s"$n;${duration.toDouble/loopCount};${durationNaive.toDouble/loopCount}\n")
+     // }
+      bw.write(s"$n_;${count}\n")
       bw.flush()
     }
     bw.close()
   }
 
   def main(args: Array[String]): Unit = {
-   // benchmark("benchmark.csv")
-    Main.testStridedInterval.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(250))
+    val r = scala.util.Random
+    //benchmarkSuiteLengths("benchmarks", r.nextInt(1 << 12), 0 to (2000000, 50000), List(1L << 5, 1L << 10, 1L << 20), 64)
+   // benchmarkSuiteStrides("benchmarks", r.nextInt(1 << 12).abs, List(10000L, 20000L), (0 to (100000, 1000)).map(_.toLong), 64)
+    //benchmark("benchmark_height_numrecursion.csv")
+    //Main.testStridedInterval.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(250))
 
     println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
     println(s"Own: ${stridedOwn} ns / ${stridedOwn / 1000000} ms (${stridedOwn.toDouble / stridedNaive}x ")
 
-    val test = CBDD.constructStridedInterval(3, 6, 5, 64)
+    val test = CBDD.constructStridedInterval(-30, 7, 6, 64)
     // val t = new IntSet[Long](test)
     println(s"Reference: ${durationRef} ns / ${durationRef / 1000000} ms")
     println(s"Own: ${duration} ns / ${duration / 1000000} ms")
@@ -256,46 +330,44 @@ object Main {
 
   }
 
-  def construct(start: Long, end: Long, stride : Long, depth : Int) : CBDD = {
-    val stride_ = stride.abs
+def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : (CBDD, Long) = {
+  if (stride == 0) return (CBDD(IntSet.toBitVector(start)), 0)
+  val stride_ = stride.abs
+  var recursionCount = 0L
+  def helper2(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
+    recursionCount = recursionCount + 1
+    require(toBeConsumed >= 0)
+    if (length <= 0) return (False, toBeConsumed, 0)
+    if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
 
-    def helper(num : Long, d : Int, countLeft : Long) : (CBDD, Long, Long) = {
-      if (countLeft <= 0) return (False, num, 0)
-      val count = if (d >= 64) Long.MaxValue else 1L << (d - 1) // max number leaves in subtree
-      if (d == 0) return (True, stride_ - 1, 1)
-      if (num < count) { // at least one leaf in right subtree
-        val (bddF, leftF, countF) = helper(num, d - 1, countLeft)
-        if (leftF < count && countF < countLeft) { // go into left subtree
-          val (bddT, leftT, countT) = helper(leftF, d - 1, countLeft - countF)
-          (Node(bddT, bddF), leftT, countF + countT)
-        } else {
-          (Node(False, bddF), leftF - count, countF)
-        }
-      } else if (num - count < count) {
-        val num_ = num - count
-        val (bddT, leftT, countT) = helper(num_, d - 1, countLeft)
-        (Node(bddT, False), leftT, countT)
-      } else {
-        (False, num - 2 * count, 0)
-      }
-    }
-    val maxCount = (end - start).abs / stride_ + 1
-    val start_ = Math.min(start, end)
-    if (start < 0) {
-      val start__ = start_ + (1L << depth - 1) // not in right subtree
-      val (res, left, c) = helper(start__, depth - 1, maxCount)
-      if (c < maxCount) {
-        val (res2, left2, c2) = helper(left, depth - 1, maxCount - c)
-        Node(res, res2)
-      } else {
-        Node(res, False)
-      }
+    val remaining = if (h < 63) toBeConsumed - (1L << h) else -1 // overflow, if h>62 we can consume any 0<=x<=long.MaxValue
 
+    if (remaining < 0L) {
+      val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length)
+      val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF)
+      (Node(bddT, bddF), leftT, countF + countT)
     } else {
-      val (res, left, c) = helper(start_, depth, maxCount)
-      res
+      (False, remaining, 0)
     }
   }
+
+  val maxCount = count // (end - start).abs / stride_ + 1
+  val start_ = start // Math.min(start, end)
+  if (start < 0) {
+    val start__ = start_ + (1L << height - 2) + (1L << height - 2) // not in right subtree. TODO wrap around
+    val (res, left, c) = helper2(start__, height - 1, maxCount)
+    if (c < maxCount) {
+      val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
+      (Node(res, res2), recursionCount)
+    } else {
+      (Node(res, False), recursionCount)
+    }
+
+  } else {
+    val (res, left, c) = helper2(start_, height, maxCount)
+    (res, recursionCount)
+  }
+}
 
   def generateSet() = {
     val r = scala.util.Random

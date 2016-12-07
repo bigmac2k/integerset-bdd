@@ -393,77 +393,48 @@ object CBDD {
 
   def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : CBDD = {
     val stride_ = stride.abs
-    def decision(b1: CBDD, b2: CBDD): CBDD = {
-      if (b1 == False && b2 == False) {
-       False
-      } else {
-        Node(b1, b2)
-      }
-    }
+
     def helper2(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
-      require(toBeConsumed >= 0)
+     // require(toBeConsumed >= 0)
       if (length <= 0) return (False, toBeConsumed, 0)
       if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
-      val remaining = if (h < 63) toBeConsumed - (1L << h) else -1 // overflow, if h>62 we can consume any 0<=x<=long.MaxValue
+      val remaining = if (h < 64) toBeConsumed - (1L << h) else -1 // overflow, if h>63 we can consume any 0<=x<=long.MaxValue
 
       if (remaining < 0L) {
         val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length)
         val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF)
-        (decision(bddT, bddF), leftT, countF + countT)
+        (Node(bddT, bddF), leftT, countF + countT)
       } else {
         (False, remaining, 0)
       }
     }
-    def helper(num : Long, h : Int, countLeft : Long) : (CBDD, Long, Long) = {
-      //println(num + " " + h + " " + countLeft)
-      if (countLeft <= 0) return (False, num, 0)
-      if (h == 0) return (True, stride_ - 1, 1)
 
-      val subTreeCount = if (h == 64) Long.MaxValue else 1L << (h - 1) // max number leaves in subtree // TODO Long.MaxValue + 1
-
-      var bddF: CBDD = False
-      var leftF: Long = num - subTreeCount // assuming we don't have a leaf in the right subtree
-      var countF: Long = 0L
-      if (num < subTreeCount) { // at least one leaf in right subtree
-        val (bddF_, leftF_, countF_) = helper(num, h - 1, countLeft)
-        bddF = bddF_
-        leftF = leftF_
-        countF = countF_
-        /*if (leftF < subTreeCount && countF < countLeft) { // go into left subtree
-          val (bddT, leftT, countT) = helper(leftF, d - 1, countLeft - countF)
-          (Node(bddT, bddF), leftT, countF + countT)
-        } else {
-          (Node(False, bddF), leftF - subTreeCount, countF)
-        }*/
-      }
-      if (leftF < subTreeCount && countF < countLeft) {
-        val (bddT, leftT, countT) = helper(leftF, h - 1, countLeft - countF)
-        (Node(bddT, bddF), leftT, countT + countF)
-      } else {
-        val bdd = if (bddF == False) {
-          False
-        } else {
-          Node(False, bddF)
-        }
-        (bdd, leftF -  subTreeCount, countF)
-      }
-    }
     val maxCount = count // (end - start).abs / stride_ + 1
-    val start_ = start // Math.min(start, end)
-    if (start < 0) {
-      val start__ = start_ + (1L << height - 2) + (1L << height - 2) // not in right subtree. TODO wrap around
-      val (res, left, c) = helper2(start__, height - 1, maxCount)
-      if (c < maxCount) {
-        val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
-        Node(res, res2)
-      } else {
-        Node(res, False)
-      }
+    var start_ = start // if (start >= 0) start else start + (1L << (height - 1)) + (1L << (height - 1))// Math.min(start, end)
+    var totalCount = 0L
+    var result: CBDD = False
+    do {
+      /*
+      if (start_ < 0) {
+        val start__ = start_ + (1L << height - 2) + (1L << height - 2) // not in right subtree. TODO wrap around
+        val (res, left, c) = helper2(start__, height - 1, maxCount)
+        totalCount += c
+        if (c < maxCount) {
+          val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
+          totalCount += c2
+          result = result || Node(res, res2)
+        } else {
+          result = result || Node(res, False)
+        }
 
-    } else {
-      val (res, left, c) = helper2(start_, height, maxCount)
-      res
-    }
+      } else { */
+        val (res, left, c) = helper2(start_, height, maxCount - totalCount)
+        result = result || res
+        totalCount += c
+        start_ = left
+      //}
+    } while (totalCount < count)
+    result
   }
 }
 
