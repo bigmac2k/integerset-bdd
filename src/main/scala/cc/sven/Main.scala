@@ -2,7 +2,7 @@ package cc.sven
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.Paths
 
-import cc.sven.bdd.{CBDD, False, Node, True}
+import cc.sven.bdd._
 import cc.sven.bounded.BoundedBits
 import cc.sven.intset.IntSet
 import cc.sven.tlike.{IntLikeSet, NBitLong, _}
@@ -112,10 +112,10 @@ object Main {
   var stridedNaive = 1L
   var stridedOwn = 1L
   val testStridedInterval = forAll {
-    (start: Int, count: Int, stride: Int) =>
+    (start: Long, count: Int, stride: Long) =>
 
       val stride_ = stride.abs.toLong max 1L
-      val start_ = (Long.MaxValue - 1 min start.toLong)
+      val start_ = start // (Long.MaxValue - 1 min start.toLong)
       val count_ = (Long.MaxValue / stride_ * 2) % 100000
       (count_ > 0) ==> {
         val bits = 64
@@ -141,6 +141,71 @@ object Main {
         if (!res) println("Wrong: start: " + start_ + ", count: " + count_ + ", stride: " + stride_)
         res
       }
+  }
+
+  val testCongruence = forAll {
+    (start: Int, count: Int, remStart: Int, trueSize: Int, falseSize: Int) =>
+
+        val trueSize_ = (trueSize % 10000).abs + 2
+        val falseSize_ = (falseSize % 10000).abs + 2
+        val modulo = trueSize_ + falseSize_
+        val remStart_ = (remStart % trueSize_).abs
+        val start_ = start.abs - (start.abs % modulo) + remStart_
+
+        val remEnd = remStart_ max modulo / 2
+        val remStart__ = remStart_ min modulo / 2
+        val length_ = count.abs % 1000000
+        val end = start_ + length_.abs
+
+        val bits = 64
+        println("start: " + start_ + ", end: " + end + ", remStart: " + remStart__ + ", remEnd: " + remEnd + ", modulo: " + modulo)
+        //  val expected = for (i <- 0L to (length_.abs  / trueSize_); j <- 0L until trueSize_ if start + i * modulo + j <= end) yield start + i * modulo + j
+        //  val expected_ = expected.map(x => NBitLong(bits, x)).toSet
+
+
+        val resBdd = constructBlocks(start_, end, remStart_, remEnd, modulo, bits)
+
+        val us = new IntSet[Long](resBdd)
+
+        val res = us.forall(x => x % modulo >= remStart__ && x % modulo <= remEnd)//expected_.forall(us.contains) && us.forall(expected_.contains)
+        if (!res) println("Wrong: start: " + start_ + ", end: " + end + ", remStart: " + remStart_ + ", remEnd: " + remEnd + ", modulo: " + modulo )
+        res
+  }
+
+  val testCongruenceRecognition = forAll {
+    (start: Int, count: Int, remStart: Int, trueSize: Int, falseSize: Int) =>
+
+      val trueSize_ = (trueSize % 10000).abs + 2
+      val falseSize_ = (falseSize % 10000).abs + 2
+      val modulo = trueSize_ + falseSize_
+      val remStart_ = (remStart % trueSize_).abs
+      val start_ = start / 2
+      val start__ = (start_.abs - (start_.abs % modulo) + remStart_).abs
+
+      val remEnd = remStart_ max modulo / 2
+      val remStart__ = remStart_ min modulo / 2
+      val length_ = count.abs % 1000000
+      val end = start__ + length_.abs + 1
+
+      val bits = 64
+      println("start: " + start__ + ", end: " + end + ", remStart: " + remStart__ + ", remEnd: " + remEnd + ", modulo: " + modulo)
+      //  val expected = for (i <- 0L to (length_.abs  / trueSize_); j <- 0L until trueSize_ if start + i * modulo + j <= end) yield start + i * modulo + j
+      //  val expected_ = expected.map(x => NBitLong(bits, x)).toSet
+
+
+      val resBdd = constructBlocks(start__, end, remStart_, remEnd, modulo, bits)
+
+      val us = new IntSet[Long](resBdd)
+      val recognized = isCongruenceInterval(resBdd, bits)
+      val res = recognized match {
+        case None => false
+        case Some((lo, hi, remLo, remHi, mod)) =>
+          val created = new IntSet[Long](constructBlocks(lo, hi, remLo, remHi, modulo, bits))
+          created.forall(us.contains) && us.forall(created.contains)
+      }
+      // val res = us.forall(x => x % modulo >= remStart__ && x % modulo <= remEnd)//expected_.forall(us.contains) && us.forall(expected_.contains)
+      if (!res) println("Wrong: start: " + start_ + ", end: " + end + ", remStart: " + remStart_ + ", remEnd: " + remEnd + ", modulo: " + modulo )
+      res
   }
 
   def cartesianProduct[A, B](as : Set[A], bs : Set[B]) : Set[(A, B)] = for{
@@ -288,12 +353,15 @@ object Main {
     //benchmarkSuiteLengths("benchmarks", r.nextInt(1 << 12), 0 to (2000000, 50000), List(1L << 5, 1L << 10, 1L << 20), 64)
    // benchmarkSuiteStrides("benchmarks", r.nextInt(1 << 12).abs, List(10000L, 20000L), (0 to (100000, 1000)).map(_.toLong), 64)
     //benchmark("benchmark_height_numrecursion.csv")
-    //Main.testStridedInterval.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(250))
+    // Main.testCongruenceRecognition.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
 
     println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
     println(s"Own: ${stridedOwn} ns / ${stridedOwn / 1000000} ms (${stridedOwn.toDouble / stridedNaive}x ")
 
-    val test = CBDD.constructStridedInterval(-30, 7, 6, 64)
+    val bla = CBDD.constructStridedInterval(17, 5, 4, 5)
+    val stride = findBestStride2(bla, 5)
+    //val test = constructStridedInterval(300, 1000, 7, 64)._1
+    //val bla = isCongruenceInterval(test, 64)
     // val t = new IntSet[Long](test)
     println(s"Reference: ${durationRef} ns / ${durationRef / 1000000} ms")
     println(s"Own: ${duration} ns / ${duration / 1000000} ms")
@@ -328,6 +396,192 @@ object Main {
 
     val x = bddSet.createStridedInterval(0, 7, 2)
 
+  }
+
+  def constructBlocks(start: Long, end: Long, remainderStart: Long, remainderEnd: Long, modulo: Long, height : Int) : CBDD = {
+
+    val trueSize = remainderEnd - remainderStart + 1
+    val falseSize = modulo - trueSize
+    val count = end + 1
+    def helper2(skip: Long, node: CBDD, h: Long, length: Long): (CBDD, Long, Long, CBDD) = {
+      // require(toBeConsumed >= 0)
+      if (length <= 0) return (False, skip, 0, node)
+      var node_ = node
+      var skip_ = skip
+      if (skip_ == 0) {
+        node_ = !node_
+        skip_ = node_ match {
+          case False => falseSize
+          case True => trueSize
+        }
+      }
+
+      val remaining = if (h < 64) skip_ - (1L << h) else -1 // overflow, if h>63 we can consume any 0<=x<=long.MaxValue
+
+      if (remaining < 0L) {
+        val (bddF, leftF, countF, nodeF) = helper2(skip_, node_, h - 1, length)
+        val (bddT, leftT, countT, nodeT) = helper2(leftF, nodeF, h - 1, length - countF)
+        (Node(bddT, bddF), leftT, countF + countT, nodeT)
+      } else {
+        (node_, remaining, 1L << h, node_)
+      }
+    }
+
+
+    val (res, left, c, _) = helper2(start, False, height, count)
+    res
+
+}
+// lo, hi, b_min, b_max, m
+def isCongruenceInterval(bdd: CBDD, height: Int): Option[(Long, Long, Long, Long, Long)] = bdd match {
+  case True => Some((0, -1, 0, 0, 1))
+  case False => None
+  case _ =>
+    val loPath = bdd.falseMost.get.padTo(height, false)
+    val hiPath = bdd.trueMost.get.padTo(height, true) // if we have a true terminal not at lowest height
+    val lo: Long = IntSet.fromBitVector[Long](loPath)
+    val hi: Long = IntSet.fromBitVector[Long](hiPath)
+
+
+    var trueSet: Boolean = false
+    var falseSet: Boolean = false
+
+    def greater(op1: List[Boolean], op2: List[Boolean]): Boolean = (op1, op2) match {
+      case (true::_, false::_) => true
+      case (false::_, true::_) => false
+      case (_::xs, _::ys) => greater(xs, ys)
+      case (_, _) => false
+    }
+    def helper2(tree: CBDD, path: List[Boolean], lastLeaf: CBDD, currentCount: Long, tc: Long, fc: Long, h: Int): Option[(CBDD, Long, Long, Long)] = tree match {
+      case x if greater(path, hiPath) => Some((lastLeaf, currentCount, tc, fc))
+      case True if !trueSet => Some((True, if (lastLeaf == False) 1L<<h else tc + (1L<<h), tc + (1L<<h), 0))
+      case False if !falseSet && lastLeaf == True =>
+        trueSet = true
+        Some((False, 1L<<h, tc, fc + 1L<<h))
+      case False if !falseSet && lastLeaf == False => Some((False, fc + (1L<<h), tc, fc + (1L<<h)))
+      case True if trueSet =>
+        falseSet = true
+        if (lastLeaf == False && currentCount != fc) {
+          None
+        } else {
+          val newCount = (if (lastLeaf == True) currentCount else 0) + (1L << h)
+          if (newCount > tc)
+            None
+          else
+            Some((True, newCount, tc, fc))
+        }
+      case False if falseSet =>
+        trueSet = true
+        if (lastLeaf == True && currentCount != tc) {
+          None
+        } else {
+          val newCount = (if (lastLeaf == False) currentCount else 0) + (1L << h)
+          if (newCount > fc)
+            None
+          else
+            Some((False, newCount, tc, fc))
+        }
+      case Node(set, uset) =>
+        helper2(uset, path.updated(path.length - h, false), lastLeaf, currentCount, tc, fc, h-1) match {
+          case None => None
+          case Some((last, count, tc_, fc_)) =>
+            helper2(set, path.updated(path.length - h, true), last, count, tc_, fc_, h-1)
+        }
+    }
+
+    helper2(bdd, List.fill(height)(false), False, 0, 0, 0, height) match {
+      case None => None
+      case Some((last, count, tc, fc)) =>
+        Some((lo, hi, lo % (tc+fc), lo % (tc+fc) + tc - 1, tc+fc))
+
+    }
+
+}
+
+def findBestStride(bdd: CBDD, height: Int): (List[Boolean], List[Boolean], Long) = {
+  def gcd(a: Long, b: Long): Long = if (b == 0) {
+    a
+  } else {
+    gcd(b, a % b)
+  }
+
+  def greater(op1: List[Boolean], op2: List[Boolean]): Boolean = (op1, op2) match {
+    case (true::_, false::_) => true
+    case (false::_, true::_) => false
+    case (_::xs, _::ys) => greater(xs, ys)
+    case (_, _) => false
+  }
+
+  def add(x : List[Boolean], y : List[Boolean]) : (Boolean, List[Boolean]) = (x,y) match {
+    case (List(a), List(b)) => (a && b, List(a != b))
+    case (a::as, b::bs) =>
+      val (c, rs) = add(as, bs)
+      ((c && a) || (c && b) || (a && b), (a!=(c!=b)) :: rs)
+  }
+
+  def inverse(x: List[Boolean]) = add(x.map(!_), List.fill(x.length - 1)(false) ++ List(true))._2
+
+  val hi = bdd.trueMost.get.reverse.padTo(64, false)
+  // count,stride, longest_hole
+  def helper(tree: CBDD, count: List[Boolean], stride: Long, longestHole: List[Boolean], endOfHole: List[Boolean], number: List[Boolean], h: Int): (List[Boolean], Long, List[Boolean], List[Boolean]) =
+    if (stride == 1)
+      (count,1, longestHole, endOfHole)
+    else if (greater(number, hi))
+      (count, stride, longestHole, endOfHole)
+    else
+      tree match {
+    case False => (add(count, List.fill(height)(false).updated(height - h - 1, true))._2, stride, longestHole, endOfHole)
+    case True if h == 0 =>
+      if (count.forall(!_)) // && stride == 0
+        (count, 0, longestHole, endOfHole)
+      else if (greater(count, longestHole)) // && (stride == 0 || (count + 1) % stride != 0))
+        (List.fill(height)(false), gcd(stride, IntSet.fromBitVector[Long](longestHole) & ((1L<<height) -1) + 1), count, number)
+      else
+        (List.fill(height)(false), gcd(IntSet.fromBitVector[Long](count) + 1, stride), longestHole, endOfHole)
+    case True if h > 0 => (List.fill(height)(false), 1, longestHole, endOfHole)
+    case Node(set, uset) =>
+      val (newCount, newStride, lh, eh) = helper(uset, count, stride, longestHole, endOfHole, number, h-1)
+      helper(set, newCount, newStride, lh, eh, number.updated(height - h, true), h-1)
+  }
+  val lo = IntSet.fromBitVector[Long](bdd.trueMost.get.reverse.padTo(64, false).reverse)
+  val leftRemainder = add(List.fill(height)(true), inverse(bdd.trueMost.get))._2//if (height == 64) -1L - lo else (1L << height) - lo
+  val (count, stride, lh, eh) = helper(bdd, leftRemainder, 0, List.fill(height)(false), List.fill(height)(false), List.fill(height)(false), height)
+  (eh, add(eh, inverse(lh))._2, stride)
+}
+
+  def findBestStride2(bdd: CBDD, height: Int): (Long, Long, Long) = {
+    def gcd(a: Long, b: Long): Long = if (b == 0) {
+      a
+    } else {
+      gcd(b, a % b)
+    }
+
+    def greater(op1: List[Boolean], op2: List[Boolean]): Boolean = (op1, op2) match {
+      case (true::_, false::_) => true
+      case (false::_, true::_) => false
+      case (_::xs, _::ys) => greater(xs, ys)
+      case (_, _) => false
+    }
+
+    // count,stride, longest_hole
+    def helper(tree: CBDD, count: Long, stride: Long, longestHole: Long, endOfHole: Long, number: Long, h: Int): (Long, Long, Long, Long) = if (stride == 1) (0,1, longestHole, endOfHole) else tree match {
+      case False => (count + (1L << h), stride, longestHole, endOfHole)
+      case True if h == 0 =>
+        if (count == 0) // && stride == 0
+          (0, 0, longestHole, endOfHole)
+        else if (count - longestHole > 0 && (stride == 0 || (count + 1) % stride != 0))
+          (0, gcd(stride, longestHole + 1), count, number)
+        else
+          (0, gcd(count + 1, stride), longestHole, endOfHole)
+      case True if h > 0 => (0, 1, longestHole, endOfHole)
+      case Node(set, uset) =>
+        val (newCount, newStride, lh, eh) = helper(uset, count, stride, longestHole, endOfHole, number, h-1)
+        helper(set, newCount, newStride, lh, eh, number + (1L << (h-1)), h-1)
+    }
+    val lo = IntSet.fromBitVector[Long](bdd.trueMost.get.reverse.padTo(64, false).reverse) & ((1L<<height) -1)
+    val leftRemainder = if (height == 64) -1L - lo else (1L << height) - lo
+    val (count, stride, lh, eh) = helper(bdd, leftRemainder - 1, 0, -1, 0, 0, height) // TODO -1
+    (eh & ((1L<<height) -1), (eh - lh) & ((1L<<height) -1), stride)
   }
 
 def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : (CBDD, Long) = {
