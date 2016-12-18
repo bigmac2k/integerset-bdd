@@ -358,8 +358,8 @@ object Main {
     println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
     println(s"Own: ${stridedOwn} ns / ${stridedOwn / 1000000} ms (${stridedOwn.toDouble / stridedNaive}x ")
 
-    val bla = CBDD.constructStridedInterval(17, 5, 4, 5)
-    val stride = findBestStride2(bla, 5)
+    val bla = CBDD.constructStridedInterval(-40,5,3330,63)
+    val stride = findStride(bla, 63)
     //val test = constructStridedInterval(300, 1000, 7, 64)._1
     //val bla = isCongruenceInterval(test, 64)
     // val t = new IntSet[Long](test)
@@ -564,16 +564,24 @@ def findBestStride(bdd: CBDD, height: Int): (List[Boolean], List[Boolean], Long)
       } else {
         val term = (l1*s2-l2*s1).toDouble / (s2-s1)
         if (term == 0 && s2 < s1) return (l1, s1) else if (term == 0 && s2 > s1) return (l2, s2)
-        val term_ = if (term < 0) -term else term
-        val log = Math.log(term_) / ln2
-        if ((s2 - s1 > 0) == (term > 0) == (height.toDouble < log)) {
-          // >
-          (l1, s1)
-         // if (height.toDouble < log) (l1, s1) else (l2, s2)
+
+        if (term < 0) {
+          val term_ = -term
+          val log = Math.log(term_) / ln2
+          if ((s2 - s1 > 0) == (-height.toDouble > log)) {
+            (l1, s1)
+          } else {
+            (l2, s2)
+          }
         } else {
-          (l2, s2)
-         // if (height.toDouble > log) (l1, s1) else (l2, s2)
+          val log = Math.log(term) / ln2
+          if ((s2 - s1 > 0) == (height.toDouble < log)) {
+            (l1, s1)
+          } else {
+            (l2, s2)
+          }
         }
+
       }
     }
     val hi = IntSet.fromBitVector[Long](bdd.trueMost.get.reverse.padTo(64, false).reverse) & ((1L<<height) -1)
@@ -612,6 +620,51 @@ def findBestStride(bdd: CBDD, height: Int): (List[Boolean], List[Boolean], Long)
     val (count, stride, lh, eh) = helper(bdd, leftRemainder - 1, 0, -1, 0, 0, height) // TODO -1
     (eh & ((1L<<height) -1), (eh - lh) & ((1L<<height) -1), stride)
   }
+
+def findStride(bdd: CBDD, height: Int): (Long, Long, Long) = {
+  def gcd(a: Long, b: Long): Long = if (b == 0) {
+    a
+  } else {
+    gcd(b, a % b)
+  }
+
+  def gcdSet(set: Set[Long]): Long = {
+    var g = 0L
+    for (x <- set) {
+      g = gcd(g, x)
+    }
+    g
+  }
+
+  val hi = IntSet.fromBitVector[Long](bdd.trueMost.get.reverse.padTo(64, false).reverse) & ((1L<<height) -1)
+  val lo = IntSet.fromBitVector[Long](bdd.falseMost.get.reverse.padTo(64, false).reverse) & ((1L<<height) -1)
+  // count,stride, longest_hole
+  def helper(tree: CBDD, count: Long, gaps: Set[(Long, Long)], number: Long, h: Int): (Long, Set[(Long, Long)]) =
+    /*if (number - hi > 0)
+      (count, gaps)
+    else */tree match {
+      case False => (count + (1L << h), gaps)
+      case True if h == 0 =>
+        (0, gaps ++ Set((count + 1, number)))
+      case True if h > 0 => (0, gaps ++ Set((1L, number)))
+      case Node(set, uset) =>
+        val (newCount, newGaps) = helper(uset, count, gaps, number, h-1)
+        helper(set, newCount, newGaps, number + (1L << (h-1)), h-1)
+  }
+
+  val leftRemainder = if (height == 64) -1L - hi else (1L << height) - hi
+  val (count, gaps) = helper(bdd, leftRemainder - 1, Set(), 0, height) // TODO -1
+
+  var r: Set[(Long, Long, Long, Long)] = Set()
+  for {(size, end) <- gaps} {
+    val rest = (gaps - ((size, end))).map(_._1)
+    val stride = gcdSet(rest)
+    val items = ((1L<<height)-size) / stride
+    r += ((items, stride, size, end))
+  }
+  val (_, stride, size, end) = r.minBy(_._1)
+  (NBitLong.bound(end, height), NBitLong.bound(end - size, height), stride)
+}
 
 def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : (CBDD, Long) = {
   if (stride == 0) return (CBDD(IntSet.toBitVector(start)), 0)
