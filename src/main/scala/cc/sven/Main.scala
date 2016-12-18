@@ -556,30 +556,59 @@ def findBestStride(bdd: CBDD, height: Int): (List[Boolean], List[Boolean], Long)
       gcd(b, a % b)
     }
 
-    def greater(op1: List[Boolean], op2: List[Boolean]): Boolean = (op1, op2) match {
-      case (true::_, false::_) => true
-      case (false::_, true::_) => false
-      case (_::xs, _::ys) => greater(xs, ys)
-      case (_, _) => false
+    val ln2 = Math.log(2)
+    def betterHole(l1: Long, s1: Long, l2: Long, s2: Long): (Long, Long) = {
+      if (s1 == 0) return (l2,s2) else if (s2 == 0) return (l1,s1)
+      if (s2 == s1) {
+        if (l1 > l2) (l1, s1) else (l2, s2)
+      } else {
+        val term = (l1*s2-l2*s1).toDouble / (s2-s1)
+        if (term == 0 && s2 < s1) return (l1, s1) else if (term == 0 && s2 > s1) return (l2, s2)
+        val term_ = if (term < 0) -term else term
+        val log = Math.log(term_) / ln2
+        if ((s2 - s1 > 0) == (term > 0) == (height.toDouble < log)) {
+          // >
+          (l1, s1)
+         // if (height.toDouble < log) (l1, s1) else (l2, s2)
+        } else {
+          (l2, s2)
+         // if (height.toDouble > log) (l1, s1) else (l2, s2)
+        }
+      }
+    }
+    val hi = IntSet.fromBitVector[Long](bdd.trueMost.get.reverse.padTo(64, false).reverse) & ((1L<<height) -1)
+    val lo = IntSet.fromBitVector[Long](bdd.falseMost.get.reverse.padTo(64, false).reverse) & ((1L<<height) -1)
+    // count,stride, longest_hole
+    def helper(tree: CBDD, count: Long, stride: Long, longestHole: Long, endOfHole: Long, number: Long, h: Int): (Long, Long, Long, Long) =
+     /* if (stride == 1)
+        (0,1, longestHole, endOfHole)
+      else*/ if (number - hi > 0)
+        (count, stride, longestHole, endOfHole)
+      else tree match {
+        case False => (count + (1L << h), stride, longestHole, endOfHole)
+        case True if h == 0 =>
+          if (longestHole == -1) {
+            (0, 0, count, number)
+          } else {
+            val remaining = hi - number
+            val newStride = gcd(remaining, gcd(count + 1, stride))
+            val (bestHole, bestStride) = betterHole(longestHole + 1, newStride, count + 1, gcd(remaining, gcd(longestHole + 1, stride)))
+            (0, bestStride, bestHole - 1, if (bestHole - 1 == longestHole) endOfHole else number)
+          }
+
+         /* if (count == 0) // && stride == 0
+            (0, 0, longestHole, endOfHole)
+          else if (count - longestHole > 0 && (stride == 0 || (count + 1) % stride != 0))
+            (0, gcd(stride, longestHole + 1), count, number)
+          else
+            (0, gcd(count + 1, stride), longestHole, endOfHole) */
+        case True if h > 0 => (0, 1, longestHole, endOfHole)
+        case Node(set, uset) =>
+          val (newCount, newStride, lh, eh) = helper(uset, count, stride, longestHole, endOfHole, number, h-1)
+          helper(set, newCount, newStride, lh, eh, number + (1L << (h-1)), h-1)
     }
 
-    // count,stride, longest_hole
-    def helper(tree: CBDD, count: Long, stride: Long, longestHole: Long, endOfHole: Long, number: Long, h: Int): (Long, Long, Long, Long) = if (stride == 1) (0,1, longestHole, endOfHole) else tree match {
-      case False => (count + (1L << h), stride, longestHole, endOfHole)
-      case True if h == 0 =>
-        if (count == 0) // && stride == 0
-          (0, 0, longestHole, endOfHole)
-        else if (count - longestHole > 0 && (stride == 0 || (count + 1) % stride != 0))
-          (0, gcd(stride, longestHole + 1), count, number)
-        else
-          (0, gcd(count + 1, stride), longestHole, endOfHole)
-      case True if h > 0 => (0, 1, longestHole, endOfHole)
-      case Node(set, uset) =>
-        val (newCount, newStride, lh, eh) = helper(uset, count, stride, longestHole, endOfHole, number, h-1)
-        helper(set, newCount, newStride, lh, eh, number + (1L << (h-1)), h-1)
-    }
-    val lo = IntSet.fromBitVector[Long](bdd.trueMost.get.reverse.padTo(64, false).reverse) & ((1L<<height) -1)
-    val leftRemainder = if (height == 64) -1L - lo else (1L << height) - lo
+    val leftRemainder = if (height == 64) -1L - hi else (1L << height) - hi
     val (count, stride, lh, eh) = helper(bdd, leftRemainder - 1, 0, -1, 0, 0, height) // TODO -1
     (eh & ((1L<<height) -1), (eh - lh) & ((1L<<height) -1), stride)
   }
