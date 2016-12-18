@@ -358,8 +358,8 @@ object Main {
     println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
     println(s"Own: ${stridedOwn} ns / ${stridedOwn / 1000000} ms (${stridedOwn.toDouble / stridedNaive}x ")
 
-    val bla = CBDD.constructStridedInterval(-40,5,3330,63)
-    val stride = findStride(bla, 63)
+    val bla = IntSet[Int](0,3,7).cbdd
+    val stride = findStride(bla, 32)
     //val test = constructStridedInterval(300, 1000, 7, 64)._1
     //val bla = isCongruenceInterval(test, 64)
     // val t = new IntSet[Long](test)
@@ -557,25 +557,27 @@ def findBestStride(bdd: CBDD, height: Int): (List[Boolean], List[Boolean], Long)
     }
 
     val ln2 = Math.log(2)
-    def betterHole(l1: Long, s1: Long, l2: Long, s2: Long): (Long, Long) = {
+    def betterHole(l1: Long, s1: Long, l2: Long, s2: Long, rem: Long): (Long, Long) = {
+      val s1_ = gcd(rem, s1)
+      val s2_ = gcd(rem, s2)
       if (s1 == 0) return (l2,s2) else if (s2 == 0) return (l1,s1)
-      if (s2 == s1) {
+      if (s2_ == s1_) {
         if (l1 > l2) (l1, s1) else (l2, s2)
       } else {
-        val term = (l1*s2-l2*s1).toDouble / (s2-s1)
-        if (term == 0 && s2 < s1) return (l1, s1) else if (term == 0 && s2 > s1) return (l2, s2)
+        val term = (l1*s2_ - l2*s1_).toDouble / (s2_ - s1_)
+        if (term == 0 && s2_ < s1_) return (l1, s1) else if (term == 0 && s2_ > s1_) return (l2, s2)
 
         if (term < 0) {
           val term_ = -term
           val log = Math.log(term_) / ln2
-          if ((s2 - s1 > 0) == (-height.toDouble > log)) {
+          if ((s2_ - s1_ > 0) == (-height.toDouble > log)) {
             (l1, s1)
           } else {
             (l2, s2)
           }
         } else {
           val log = Math.log(term) / ln2
-          if ((s2 - s1 > 0) == (height.toDouble < log)) {
+          if ((s2_ - s1_ > 0) == (height.toDouble < log)) {
             (l1, s1)
           } else {
             (l2, s2)
@@ -599,8 +601,8 @@ def findBestStride(bdd: CBDD, height: Int): (List[Boolean], List[Boolean], Long)
             (0, 0, count, number)
           } else {
             val remaining = hi - number
-            val newStride = gcd(remaining, gcd(count + 1, stride))
-            val (bestHole, bestStride) = betterHole(longestHole + 1, newStride, count + 1, gcd(remaining, gcd(longestHole + 1, stride)))
+            val newStride = gcd(count + 1, stride)
+            val (bestHole, bestStride) = betterHole(longestHole + 1, newStride, count + 1, gcd(longestHole + 1, stride), remaining)
             (0, bestStride, bestHole - 1, if (bestHole - 1 == longestHole) endOfHole else number)
           }
 
@@ -618,7 +620,7 @@ def findBestStride(bdd: CBDD, height: Int): (List[Boolean], List[Boolean], Long)
 
     val leftRemainder = if (height == 64) -1L - hi else (1L << height) - hi
     val (count, stride, lh, eh) = helper(bdd, leftRemainder - 1, 0, -1, 0, 0, height) // TODO -1
-    (eh & ((1L<<height) -1), (eh - lh) & ((1L<<height) -1), stride)
+    (eh & ((1L << (height - 1)) - 1), (eh - lh - 1) & ((1L << (height - 1)) - 1), stride)
   }
 
 def findStride(bdd: CBDD, height: Int): (Long, Long, Long) = {
@@ -663,7 +665,7 @@ def findStride(bdd: CBDD, height: Int): (Long, Long, Long) = {
     r += ((items, stride, size, end))
   }
   val (_, stride, size, end) = r.minBy(_._1)
-  (NBitLong.bound(end, height), NBitLong.bound(end - size, height), stride)
+  (end & ((1L << (height - 1)) - 1), (end - size) & ((1L << (height - 1)) - 1), stride)
 }
 
 def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : (CBDD, Long) = {
