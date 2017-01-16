@@ -387,6 +387,7 @@ object Main {
    // val (normal, ov) = CBDD.plusSingleton(bddSet.set.cbdd, IntSet.toBitVector(8L),64)
    // val result = new IntSet[Long](normal || ov)
 //    val r = bddSet.plusSingleton(5L).set.toList.sorted
+    val xx = bddSet.toIvalSetP(1)
     val op = NBitLong.bound(4034120, bits)
     val ref = set.map(NBitLong.bound(_, bits)).map(_*op)
     //val res = bddSet.mulSingleton4(NBitLong(bits, op))

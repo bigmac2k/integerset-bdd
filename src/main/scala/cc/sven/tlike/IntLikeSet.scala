@@ -296,6 +296,88 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
    }
   }
 
+  def mulP(precision: Double)(that : IntLikeSet[I, T]) = {
+    import int.{ mkNumericOps, mkOrderingOps }
+    import cc.sven.interval.Interval._
+    val ivalInt = implicitly[Arith[Interval[I]]]
+    val ivalSet1 = toIvalSetP(precision)
+    val ivalSet2 = that.toIvalSetP(precision)
+
+    val bits_ = bits * 2
+    //assert(bits_ <= implicitly[BoundedBits[I]].bits)
+    val ivalRes = for{
+      a <- ivalSet1
+      b <- ivalSet2
+    } yield {
+      //(a * b)
+      (a, b) match {
+        case (EmptyIval, _) => EmptyIval
+        case (_, EmptyIval) => EmptyIval
+        case (FilledIval(lo1, hi1), FilledIval(lo2, hi2)) => {
+          //force BigInt operation because fuck it - I want results!
+          //this will have a special place int he hall of shame
+          //XXX SCM : Change this horrible thing!
+          val a = BigInt(lo1.toLong) * BigInt(lo2.toLong)
+          val b = BigInt(lo1.toLong) * BigInt(hi2.toLong)
+          val c = BigInt(hi1.toLong) * BigInt(lo2.toLong)
+          val d = BigInt(hi1.toLong) * BigInt(hi2.toLong)
+          val lo = a min b min c min d
+          val hi = a max b max c max d
+          val a_ = lo1 * lo2
+          val b_ = lo1 * hi2
+          val c_ = hi1 * lo2
+          val d_ = hi1 * hi2
+          val lo_ = a_ min b_ min c_ min d_
+          val hi_ = a_ max b_ max c_ max d_
+          val lo__ = if(BigInt(lo_.toLong) != lo) bounded.minBound else lo_
+          val hi__ = if(BigInt(hi_.toLong) != hi) bounded.maxBound else hi_
+          FilledIval(lo__, hi__)
+        }
+      }
+    }
+
+    (IntLikeSet[I, T](bits_) /: ivalRes){
+      case (acc, EmptyIval) => acc
+      case (acc, FilledIval(lo, hi)) => acc union IntLikeSet.range[I, T](bits_ min boundedBits.bits, lo, hi).changeBitWidth(bits_)
+    }
+  }
+
+  def toIvalSetP(precision: Double): Set[Interval[I]] = {
+    val two = int.fromInt(2)
+
+    def pow( exp: Int): I = {
+      if (exp == 0) int.one else int.times(two, pow(exp - 1))
+    }
+
+    def calcEnd(start: I, height: Int): I = {
+      int.minus(int.plus(start, pow(height)), int.one)
+    }
+
+    def count(bdd: CBDD, height: Int): Long = {
+      bdd.truePaths.map(l => 1L << (height - l.length)).sum
+    }
+
+    def helper(bdd: CBDD, height: Int, start: I): Set[Interval[I]] = bdd match {
+      case False => Set()
+      case True =>
+        println(s"Start: $start, $height")
+        Set(FilledIval(start, calcEnd(start, height)))
+      case n@Node(set, uset) => {
+        val approxSize = if (height == 64) Long.MaxValue else 1L << height
+        val actualSize = count(n, height)
+        println(s"$actualSize, $approxSize ${actualSize.toDouble / approxSize}")
+        if ((actualSize.toDouble / approxSize).abs >= precision) {
+          Set(FilledIval(start, calcEnd(start, height)))
+        } else {
+          helper(set, height - 1, int.plus(start, pow(height - 1))) union helper(uset, height - 1, start)
+        }
+      }
+    }
+
+    val bdd = getBWCBDD
+    helper(bdd, bits, int.zero)
+  }
+
   def mulSingleton(op : T) : IntLikeSet[I, T] = {
     val (opBits, opI) = castTI(op)
     assert(opBits == bits)
