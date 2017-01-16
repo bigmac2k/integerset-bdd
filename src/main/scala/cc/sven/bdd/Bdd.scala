@@ -396,6 +396,7 @@ object CBDD {
 
     def helper2(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
      // require(toBeConsumed >= 0)
+
       if (length <= 0) return (False, toBeConsumed, 0)
       if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
       val remaining = if (h < 64) toBeConsumed - (1L << h) else -1 // overflow, if h>63 we can consume any 0<=x<=long.MaxValue
@@ -414,25 +415,27 @@ object CBDD {
     var totalCount = 0L
     var result: CBDD = False
     do {
-      /*
+
       if (start_ < 0) {
-        val start__ = start_ + (1L << height - 2) + (1L << height - 2) // not in right subtree. TODO wrap around
+        val start__ = start_ + (1L << (height - 2)) + (1L << (height - 2)) // not in right subtree. TODO wrap around
         val (res, left, c) = helper2(start__, height - 1, maxCount)
+        result = result || Node(res, False)
         totalCount += c
-        if (c < maxCount) {
+        start_ = left
+        /*if (c < maxCount) {
           val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
           totalCount += c2
           result = result || Node(res, res2)
         } else {
           result = result || Node(res, False)
         }
-
-      } else { */
+        */
+      } else {
         val (res, left, c) = helper2(start_, height, maxCount - totalCount)
         result = result || res
         totalCount += c
         start_ = left
-      //}
+      }
     } while (totalCount < count)
     result
   }
