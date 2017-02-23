@@ -9,7 +9,7 @@ import cc.sven.tlike.{IntLikeSet, NBitLong, _}
 import org.scalacheck.Prop.{BooleanOperators, forAll}
 import org.scalacheck.Test
 
-import scala.collection.AbstractSeq
+import scala.collection.{AbstractSeq, mutable}
 
 object Main {
   var duration = 1L
@@ -22,7 +22,7 @@ object Main {
     (a : Set[Int], b : Int, k : Int, offset : Int, offset2 : Int, bits: Int) =>
       (b >0) ==> {
        // println("Test")
-        val k_ = (k.abs % 10) max 1
+        val k_ = (k.abs % 12) max 1
 
         val interval = ((1 << k_) + offset) until ((1 << (k_ + 1)) + offset)
         val interval2 = ((1 << k_) + offset2) until ((1 << (k_ + 1)) + offset2)
@@ -32,7 +32,7 @@ object Main {
         val aBounded = (a ++ interval ++ interval2).map(x => NBitLong.bound(x.toLong, bits_)) // TODO
 
         val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
-        val b_ = NBitLong.bound(b, bits_)
+        val b_ = NBitLong.bound(if (b==0) 5 else b, bits_)
         var start = System.nanoTime()
         val ref = cartesianProduct(aBounded, Set(b_.toLong)).map((x) => x._1 * x._2)
         durationRef += System.nanoTime() - start
@@ -43,11 +43,11 @@ object Main {
         duration += System.nanoTime() - start
 
         start = System.nanoTime()
-        val us2 = a_.mulSingleton3(NBitLong(bits_, b))
+     //   val us2 = a_.mulSingleton2(NBitLong(bits_, b))
         duration2 += System.nanoTime() - start
 
         start = System.nanoTime()
-        val us3 = a_.mulSingleton3(NBitLong(bits_, b))
+       // val us3 = a_.mulSingleton3(NBitLong(bits_, b))
         duration3 += System.nanoTime() - start
 
         start = System.nanoTime()
@@ -62,7 +62,7 @@ object Main {
         val ref_ = ref.map((x: Long) => castIT((bits_, x)))
         val res = ref_.forall(us4.contains) // ref_.forall(us3.contains) && ref_.forall(us.contains) && ref_.forall(us2.contains) &&
         //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4 + ", ref: " + ref_ + ", result: " + res)
-        if(!res) println("inputa_: " + a_.set + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4.set + ", ref: " + ref_ + ", result: " + res)
+        if(!res) println("Fail inputa_: " + a_.set + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4.set + ", ref: " + ref_ + ", result: " + res)
 
         c = c + 1
         res
@@ -93,6 +93,31 @@ object Main {
       val res = ref_.forall(us.contains) && us.forall(ref_.contains)
      // println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
       //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+      res
+  }
+
+  val testSingleton2 = forAll{
+    (a : Set[Int], b : Int, k : Int, offset : Long) =>
+      val k_ = 3
+      val interval = ((1L << k_) + offset) until ((1L << (k_ + 1)) + offset)
+      val longBits = implicitly[BoundedBits[Long]].bits
+      val bits_ = longBits // (NBitLong.boundBits(bits) / 2) max 1
+      val b__ = if (b==0) 5 else b
+      val aBounded = a.map(x => NBitLong.bound(x.toLong, bits_)) // TODO
+
+      val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
+      val b_ = NBitLong.bound(b__.toLong, bits_)
+      var start = System.nanoTime()
+      val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 * x._2)
+
+      println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ )
+      val us = a_.mulSingleton4(NBitLong(bits_, b_.toLong))
+
+      val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+      val ref_ = ref.map((x: Long) => castIT((bits_, x)))
+      val res = ref_.forall(us.contains) && us.forall(ref_.contains)
+      // println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+      if(!res) println("Fail: inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
       res
   }
 
@@ -143,32 +168,19 @@ object Main {
       }
   }
 
-  val testCongruence = forAll {
-    (start: Int, count: Int, remStart: Int, trueSize: Int, falseSize: Int) =>
+  val testStrideRecognition = forAll {
+    (start: Int, count: Int, stride: Int) =>
+        val start_ = start.abs.toLong % (1L << 30)
+        val stride_ = math.max(2,stride.abs.toLong)
+        val count_ = math.max(2, count.abs % (1L<<30 / stride_.toLong))
+        val end = start_ + count * stride_.toLong
 
-        val trueSize_ = (trueSize % 10000).abs + 2
-        val falseSize_ = (falseSize % 10000).abs + 2
-        val modulo = trueSize_ + falseSize_
-        val remStart_ = (remStart % trueSize_).abs
-        val start_ = start.abs - (start.abs % modulo) + remStart_
+        val resBdd = CBDD.constructStridedInterval(start_, count_, stride_, 32)
 
-        val remEnd = remStart_ max modulo / 2
-        val remStart__ = remStart_ min modulo / 2
-        val length_ = count.abs % 1000000
-        val end = start_ + length_.abs
+        val (start2, stride2, end2) = findStrideMemo(resBdd, 32)
 
-        val bits = 64
-        println("start: " + start_ + ", end: " + end + ", remStart: " + remStart__ + ", remEnd: " + remEnd + ", modulo: " + modulo)
-        //  val expected = for (i <- 0L to (length_.abs  / trueSize_); j <- 0L until trueSize_ if start + i * modulo + j <= end) yield start + i * modulo + j
-        //  val expected_ = expected.map(x => NBitLong(bits, x)).toSet
-
-
-        val resBdd = constructBlocks(start_, end, remStart_, remEnd, modulo, bits)
-
-        val us = new IntSet[Long](resBdd)
-
-        val res = us.forall(x => x % modulo >= remStart__ && x % modulo <= remEnd)//expected_.forall(us.contains) && us.forall(expected_.contains)
-        if (!res) println("Wrong: start: " + start_ + ", end: " + end + ", remStart: " + remStart_ + ", remEnd: " + remEnd + ", modulo: " + modulo )
+        val res = start2 == start_ && stride2 == stride_ // && end2 == end
+        if (!res) println("Wrong: start: " + start_ + ", stride: " + stride_ + "count: " + count_ + "start: "+ start2 + ", stride: " + stride2)
         res
   }
 
@@ -300,8 +312,18 @@ object Main {
 
       for (stride <- strides) {
         println(s"Stride: $stride, Length: $length")
-        val (tree, rcount) = constructStridedInterval(start, length, stride, height)
-        bw.write(s"$stride;$rcount\n")
+        var s = System.nanoTime()
+        for(i<-1 to 10) {
+          var (tree, rcount) = constructStridedInterval(start, length, stride, height)
+        }
+
+        val d = System.nanoTime() - s
+        s = System.nanoTime()
+        for(i<-1 to 10) {
+          var tree = CBDD.constructStridedInterval(start, length, stride, height)
+        }
+        val d2 = System.nanoTime() - s
+        bw.write(s"$stride;$d;$d2\n")
         bw.flush()
       }
       bw.close()
@@ -348,18 +370,38 @@ object Main {
     bw.close()
   }
 
-  def main(args: Array[String]): Unit = {
-    val r = scala.util.Random
-    //benchmarkSuiteLengths("benchmarks", r.nextInt(1 << 12), 0 to (2000000, 50000), List(1L << 5, 1L << 10, 1L << 20), 64)
-   // benchmarkSuiteStrides("benchmarks", r.nextInt(1 << 12).abs, List(10000L, 20000L), (0 to (100000, 1000)).map(_.toLong), 64)
-    //benchmark("benchmark_height_numrecursion.csv")
-    // Main.testCongruenceRecognition.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
+  def mul(a: Set[Int], y: Int): Set[Long] = {
+    val aBounded = a.map(x => NBitLong.bound(x.toLong, 64))
+    val a_ = (IntLikeSet[Long, NBitLong](64) /: aBounded) ((acc, x) => acc + NBitLong(64, x))
+    val b_ = NBitLong.bound(y.toLong, 64)
+    var start = System.nanoTime()
+    val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 + x._2)
 
+    //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
+    val us = a_.mulSingleton4(NBitLong(64, b_.toLong))
+
+    val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+    val ref_ = ref.map((x: Long) => castIT((64, x)))
+    us.set
+  }
+
+  def main(args: Array[String]): Unit = {
+    fastGcd(List(6,32,16,4))
+
+    val r = scala.util.Random
+    val t = CBDD.constructStridedInterval(0, 1L << 15, 2000, 16)
+    //benchmarkSuiteLengths("benchmarks", r.nextInt(1 << 12), 0 to (2000000, 50000), List(1L << 5, 1L << 10, 1L << 20), 64)
+    //benchmarkSuiteStrides("benchmarks", 0, List(1L << 15), (1 to ((1 << 15) - 1, 1)).map(_.toLong), 16)
+    //benchmark("benchmark_height_numrecursion.csv")
+     Main.testStrideRecognition.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
+    mul(Set(7,18,19),-3)
+    val stride = findStrideMemo(CBDD.constructStridedInterval(0,1L<<15,2,16), 16)
+    //Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
     println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
     println(s"Own: ${stridedOwn} ns / ${stridedOwn / 1000000} ms (${stridedOwn.toDouble / stridedNaive}x ")
 
     val bla = IntSet[Int](0,3,7).cbdd
-    val stride = findStride(bla, 32)
+    //val stride = findStride(bla, 32)
     //val test = constructStridedInterval(300, 1000, 7, 64)._1
     //val bla = isCongruenceInterval(test, 64)
     // val t = new IntSet[Long](test)
@@ -381,13 +423,13 @@ object Main {
     val bits = 64
     val k = 4
     val interval = 1L << k until 1L << (k+1)
-    var set = Set (20L, 21L, 16L, 17L, 18L, 19L, 0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L)//Set(-9223372036854775806L, -9223372036854775805L) // 4L,5L,6L,7L, 8,32,33, 34,35,36,37,38,39,40,41,42,43,44,45,46,47) // generateSet()
+    var set = Set (20L, 21L, 16L, 17L, 18L, 19L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L)//Set(-9223372036854775806L, -9223372036854775805L) // 4L,5L,6L,7L, 8,32,33, 34,35,36,37,38,39,40,41,42,43,44,45,46,47) // generateSet()
     //set ++= interval
     val bddSet = (IntLikeSet[Long, NBitLong](bits) /: set) ((acc, x) => acc + NBitLong(bits, NBitLong.bound(x, bits)))
    // val (normal, ov) = CBDD.plusSingleton(bddSet.set.cbdd, IntSet.toBitVector(8L),64)
    // val result = new IntSet[Long](normal || ov)
 //    val r = bddSet.plusSingleton(5L).set.toList.sorted
-    val xx = bddSet.toIvalSetP(1)
+   // val xx = bddSet.toIvalSetP(0.5)
     val op = NBitLong.bound(4034120, bits)
     val ref = set.map(NBitLong.bound(_, bits)).map(_*op)
     //val res = bddSet.mulSingleton4(NBitLong(bits, op))
@@ -395,8 +437,66 @@ object Main {
     val castIT = implicitly[Castable[(Int, Long), NBitLong]]
     //val correct = ref.map((x:Long)=>castIT((bits, x))).forall(res.contains)
 
-    val x = bddSet.createStridedInterval(0, 7, 2)
+    //val x = constructStridedIntervalMemo(0, 1L<<31, 2, 32)
+    println()
+  }
 
+  def memoize[I, O](f: I => O): I => O = new mutable.HashMap[I, O]() {
+    override def apply(key: I) = {
+      getOrElseUpdate(key, f(key))
+    }
+  }
+
+  def findStrideMemo(bdd: CBDD, height: Int): (Long, Long, Long) = {
+    def gcd(a: Long, b: Long): Long = if (b == 0) {
+      a
+    } else {
+      gcd(b, a % b)
+    }
+
+    def isFalse(l: Long, s: Long, r: Long): Boolean = {
+      s == 0 && (l != 0 || r != 0)
+    }
+
+    lazy val helperMemo: ((CBDD, Int)) => (Long, Long, Long, Boolean) = memoize[(CBDD, Int),(Long, Long, Long, Boolean)] {
+      case (True, 0)  => (0L, 0L, 0L, true)
+      case (True, h)  => (0L, 1L, 0L, true)
+      case (False, h) => (1L << h, 0L, 0L, false)
+      case (Node(set, uset), h) => {
+        val (fLeft, fStride, fRight, fContainsTrue) = helperMemo(uset, h - 1)
+        val (tLeft, tStride, tRight, tContainsTrue) = helperMemo(set, h - 1)
+
+        if (!tContainsTrue) {
+          (tLeft + tRight + fLeft, fStride, fRight, fContainsTrue)
+        } else if (!fContainsTrue) {
+          (tLeft, tStride, tRight + fLeft + fRight, tContainsTrue)
+        } else {
+          (tLeft, gcd(gcd(fStride, tStride), tRight + fLeft + 1), fRight, tContainsTrue || fContainsTrue)
+        }
+      }
+    }
+
+    def helper(bdd: CBDD, h: Int, incoming: Boolean): (Long, Long, Long, Boolean) = bdd match {
+      case True if h == 0 => (0L, 0L, 0L, true)
+      case True if h > 0 => (0L, 1L, 0L, true)
+      case False => (1L << h, 0L, 0L, false)
+      //case False if incoming => (0L, 0L, 1L << h, false)
+      case Node(set, uset) =>
+        val (tLeft, tStride, tRight, tContainsTrue) = helper(set, h - 1, true)
+        val (fLeft, fStride, fRight, fContainsTrue) = helper(uset, h - 1, false)
+
+        if (!tContainsTrue) {
+          (fLeft, fStride, fRight + tLeft + tRight, fContainsTrue)
+        } else if (!fContainsTrue) {
+          (fLeft + fRight + tLeft, tStride, tRight, tContainsTrue)
+        } else {
+          (fLeft, gcd(gcd(fStride, tStride), tLeft + fRight + 1), tRight, tContainsTrue || fContainsTrue)
+        }
+
+
+    }
+    val (left, stride, right, _) = helperMemo((bdd, height))
+    (right, stride, (1L << height) - left - 1)
   }
 
   def constructBlocks(start: Long, end: Long, remainderStart: Long, remainderEnd: Long, modulo: Long, height : Int) : CBDD = {
@@ -669,6 +769,64 @@ def findStride(bdd: CBDD, height: Int): (Long, Long, Long) = {
   (end & ((1L << (height - 1)) - 1), (end - size) & ((1L << (height - 1)) - 1), stride)
 }
 
+
+
+  def constructStridedIntervalMemo(start: Long, count: Long, stride : Long, height : Int) : (CBDD, Long) = {
+    lazy val strideCache = new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
+    if (stride == 0) return (CBDD(IntSet.toBitVector(start)), 0)
+    val stride_ = stride.abs
+    var recursionCount = 0L
+    var nonTrivial = 0l
+    var computeCount = 0L
+
+    def helper2(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
+      recursionCount = recursionCount + 1
+
+      require(toBeConsumed >= 0)
+      if (length <= 0) return (False, toBeConsumed, 0)
+      if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
+
+      val remaining = if (h < 63) toBeConsumed - (1L << h) else -1 // overflow, if h>62 we can consume any 0<=x<=long.MaxValue
+
+      if (remaining < 0L) {
+        nonTrivial = nonTrivial + 1
+        if (length * stride_ - (stride_ - toBeConsumed) - (1L << h) < 0) {
+          // don' memoize
+          val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length)
+          val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF)
+          (Node(bddT, bddF), leftT, countF + countT)
+        } else {
+          strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {
+            computeCount = computeCount+1
+            val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length) // strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {helper2(toBeConsumed, h - 1, length)})
+            val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF) //strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {helper2(leftF, h - 1, length - countF)})
+            (Node(bddT, bddF), leftT, countF + countT)
+          })
+        }
+      } else {
+        (False, remaining, 0)
+      }
+    }
+
+    val maxCount = count // (end - start).abs / stride_ + 1
+    val start_ = start // Math.min(start, end)
+    if (start < 0) {
+      val start__ = start_ + (1L << height - 2) + (1L << height - 2) // not in right subtree. TODO wrap around
+      val (res, left, c) = helper2(start__, height - 1, maxCount)
+      if (c < maxCount) {
+        val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
+        (Node(res, res2), recursionCount)
+      } else {
+        (Node(res, False), recursionCount)
+      }
+
+    } else {
+      val (res, left, c) = helper2(start_, height, maxCount)
+      println(start_, stride_, computeCount, nonTrivial)
+      (res, recursionCount)
+    }
+  }
+
 def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : (CBDD, Long) = {
   if (stride == 0) return (CBDD(IntSet.toBitVector(start)), 0)
   val stride_ = stride.abs
@@ -717,4 +875,25 @@ def constructStridedInterval(start: Long, count: Long, stride : Long, height : I
     } yield r.nextLong()
     s.toSet
   }
+
+  def fastGcd(nums: List[Long]): List[Long] = {
+    def gcd(a: Long, b: Long): Long = if (b == 0) {
+      a
+    } else {
+      gcd(b, a % b)
+    }
+
+    val until = new Array[Long](nums.length + 1)
+    val from = new Array[Long](nums.length + 1)
+    until(0) = 0
+    from(nums.length) = 0
+    for (i <- 1 to nums.length) {
+      until(i) = gcd(until(i-1), nums(i-1))
+      from(nums.length - i) = gcd(from(nums.length - i + 1), nums(nums.length - i))
+    }
+    (1 to nums.length).map(i => gcd(until(i-1), from(i))).toList
+  }
 }
+
+
+

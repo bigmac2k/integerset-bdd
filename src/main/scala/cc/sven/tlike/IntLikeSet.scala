@@ -222,6 +222,37 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     case Node(set, uset) => (fromBWCBDD(Node(set, False)), fromBWCBDD(Node(False, uset)))
     case x => (fromBWCBDD(Node(x, False)), fromBWCBDD(Node(False, x)))
   }
+
+  def testGeneralHeight(that: IntLikeSet[I,T]): List[(Int,Double)] = {
+    List()
+  }
+
+  def testGeneralPrecision(that: IntLikeSet[I,T]): List[(Int,Double)] = {
+    List()
+  }
+
+  def testSingleton(that: IntLikeSet[I,T]): List[Double] = {
+    List()
+  }
+
+  def mult(that : IntLikeSet[I, T]): IntLikeSet[I,T] = {
+    val heightResult = testGeneralHeight(that)
+    val precisionResult = testGeneralPrecision(that)
+    val isSingleton = false
+    val singletonResult = if (isSingleton) {
+      testSingleton(that)
+    } else {
+      List()
+    }
+    val precise = for{
+      a <- this.set
+      b <- that.set
+    } yield castIT(bits, int.times(a, b))
+
+
+
+    mul(1<<30,20)(that)
+  }
   /*
    * should have toivalset such that Set(-1) yields [-1 .. -1] even if depths is only 1
    *  -> go down bdd until first node with both sub-bdds non false
@@ -367,7 +398,9 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
         val actualSize = count(n, height)
         println(s"$actualSize, $approxSize ${actualSize.toDouble / approxSize}")
         if ((actualSize.toDouble / approxSize).abs >= precision) {
-          Set(FilledIval(start, calcEnd(start, height)))
+          val lo = (IntSet.toBitVector(start).take(bits - height) ++ n.falseMost.get).padTo(bits, false)
+          val hi = (IntSet.toBitVector(start).take(bits - height) ++ n.trueMost.get).padTo(bits, true)
+          Set(FilledIval(IntSet.fromBitVector(lo), IntSet.fromBitVector(hi))) // TODO
         } else {
           helper(set, height - 1, int.plus(start, pow(height - 1))) union helper(uset, height - 1, start)
         }
@@ -497,29 +530,13 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     lazy val shiftedOpBdd = CBDD(shiftedOp)
     bdd match {
       case False => False
-      case True if k == 0 => // leaf in lowest level
+      /*case True if k == 0 => // leaf in lowest level
         if (incomingEdge) {
           CBDD(op) // {op}
         } else {
           CBDD(List.fill(bits_)(false)) // {0}
-        }
+        }*/
       case True =>
-        // println(s"True terminal not on lowest level: ${k} - Start: ${opI_ *smallestPossible}, End: ${opI_ * (value_ + int.fromInt((1 << k) - 1))}")
-        // val children = mulHelper4(True, opI, op, incomingEdge = true, height + 1, smallestPossible.updated(height,true)) || mulHelper4(True, opI, op, incomingEdge = false, height + 1, smallestPossible) // expand true node
- //       val start = int.zero // int.times(IntSet.fromBitVector(smallestPossible), opI)
-//        val end = int.times(IntSet.fromBitVector(List.fill(bits_ - k)(false) ++ List.fill(k)(true)), opI) // 2^k-1
-       // println(start, end)
-        //val children = stridedBdd(List.fill(bits_)(false), mulBinary(op, List.fill(bits_ - k)(false) ++ List.fill(k)(true)), op)
-
-        //val children = createStridedInterval(opI_ * smallestPossible,  opI_ * (value_ + int.fromInt((1 << k) - 1)), int.one)
-        /*if (incomingEdge) {
-          // val (norm, ov) = CBDD.plusSingleton(children, shiftedOp, bits_)
-          //  norm || ov
-
-          //children
-        } else {
-          construct(int.toLong(IntSet.fromBitVector(mulBinary(op, smallestPossible))), 1L << k, int.toLong(opI), bits_)
-        } */
         val result = if (incomingEdge) {
           CBDD.constructStridedInterval(int.toLong(IntSet.fromBitVector(shiftedOp)), 1L << k, int.toLong(opI), bits_)
 

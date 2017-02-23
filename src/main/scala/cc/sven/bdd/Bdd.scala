@@ -3,6 +3,8 @@ package cc.sven.bdd
 import scala.collection.mutable.WeakHashMap
 import scala.ref._
 import cc.sven.misc.unsignedLongToBigInt
+
+import scala.collection.mutable
 /*
 import scala.concurrent._
 import scala.concurrent.duration.Duration.Inf
@@ -391,13 +393,22 @@ object CBDD {
     case Node(set, uset) => Node(bNot(uset), bNot(set))
   }
 
+
+
   def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : CBDD = {
+    lazy val strideCache = new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
+    var start_ = start
+    if (stride < 0L) {
+      start_ = start + (count - 1) * stride
+    }
     val stride_ = stride.abs
+
+
 
     def helper2(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
      // require(toBeConsumed >= 0)
 
-      if (length <= 0) return (False, toBeConsumed, 0)
+    /*  if (length <= 0) return (False, toBeConsumed, 0)
       if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
       val remaining = if (h < 64) toBeConsumed - (1L << h) else -1 // overflow, if h>63 we can consume any 0<=x<=long.MaxValue
 
@@ -407,13 +418,36 @@ object CBDD {
         (Node(bddT, bddF), leftT, countF + countT)
       } else {
         (False, remaining, 0)
+      }*/
+
+      if (length <= 0) return (False, toBeConsumed, 0)
+      if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
+
+      val remaining = if (h < 64) toBeConsumed - (1L << h) else -1 // overflow, if h>62 we can consume any 0<=x<=long.MaxValue
+
+      if (remaining < 0L) {
+        if (h == 64 || h == 63 || Math.ceil(((1L << h) - toBeConsumed) / stride_.toDouble) > length) { // TODO
+          // don' memoize
+          val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length)
+          val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF)
+          (Node(bddT, bddF), leftT, countF + countT)
+        } else {
+          strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {
+            val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length) // strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {helper2(toBeConsumed, h - 1, length)})
+            val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF) //strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {helper2(leftF, h - 1, length - countF)})
+            (Node(bddT, bddF), leftT, countF + countT)
+          })
+        }
+      } else {
+        (False, remaining, 0)
       }
     }
 
     val maxCount = count // (end - start).abs / stride_ + 1
-    var start_ = start // if (start >= 0) start else start + (1L << (height - 1)) + (1L << (height - 1))// Math.min(start, end)
+     // if (start >= 0) start else start + (1L << (height - 1)) + (1L << (height - 1))// Math.min(start, end)
     var totalCount = 0L
     var result: CBDD = False
+    /*
     do {
 
       if (start_ < 0) {
@@ -436,8 +470,18 @@ object CBDD {
         totalCount += c
         start_ = left
       }
-    } while (totalCount < count)
-    result
+    } while (totalCount < count) */
+
+    if (start_ < 0) {
+      val start__ = start_ + (1L << (height - 2)) + (1L << (height - 2))
+      // not in right subtree. TODO wrap around
+      val (res, left, c) = helper2(start__, height - 1, maxCount)
+      Node(res, False)
+    } else {
+      val (res, left, c) = helper2(start_, height, maxCount - totalCount)
+      res
+    }
+
   }
 }
 
