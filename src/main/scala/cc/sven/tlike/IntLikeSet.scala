@@ -1,11 +1,14 @@
 package cc.sven.tlike
 
+import cc.sven.Evaluator
+
 import scala.collection.SetLike
 import cc.sven.bdd._
 import cc.sven.intset._
 import cc.sven.bounded._
 import cc.sven.interval._
 import cc.sven.misc.unsignedLongToBigInt
+
 import scala.collection.JavaConverters._
 
 class BitWidthException(widthA : Int, widthB : Int) extends Exception {
@@ -89,7 +92,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 	//def sizeBigInt = set.cbdd.truePaths.map((x) => BigInt(1l << (boundedBits.bits - x.length))).sum
 	def sizeBigInt: BigInt = {
 		import scala.math.BigInt._
-		assert(set.cbdd.depth <= boundedBits.bits)
+		assert(set.cbdd.depth <= boundedBits.bits, s"${set.cbdd.depth} > ${boundedBits.bits}")
 		if(set.cbdd.depth > 64) //we use long
 		//could be optimized by only going through cbdd.depth - 64 upper part.
 			set.cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
@@ -219,35 +222,14 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 		case Node(set, uset) => (fromBWCBDD(Node(set, False)), fromBWCBDD(Node(False, uset)))
 		case x => (fromBWCBDD(Node(x, False)), fromBWCBDD(Node(False, x)))
 	}
-	def testGeneralHeight(that: IntLikeSet[I,T]): List[(Int,Double)] = {
-		List()
-	}
 
-	def testGeneralPrecision(that: IntLikeSet[I,T]): List[(Int,Double)] = {
-		List()
-	}
-
-	def testSingleton(that: IntLikeSet[I,T]): List[Double] = {
-		List()
-	}
-
-	def mult(that : IntLikeSet[I, T]): IntLikeSet[I,T] = {
-		val heightResult = testGeneralHeight(that)
-		val precisionResult = testGeneralPrecision(that)
-		val isSingleton = false
-		val singletonResult = if (isSingleton) {
-			testSingleton(that)
-		} else {
-			List()
-		}
-		val precise = for{
-			a <- this.set
-			b <- that.set
-		} yield castIT(bits, int.times(a, b))
+	def mult(elems : Int, depths_ : Int)(that : IntLikeSet[I, T]): IntLikeSet[I,T] = {
+		println("Multiplication!")
+	  Evaluator.evaluate(this, that, elems, depths_)
 
 
 
-		mul(1<<30,20)(that)
+		mul(elems,depths_)(that)
 	}
 	/*
 	 * should have toivalset such that Set(-1) yields [-1 .. -1] even if depths is only 1
@@ -368,6 +350,90 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 			case (acc, FilledIval(lo, hi)) => acc union IntLikeSet.range[I, T](bits_ min boundedBits.bits, lo, hi).changeBitWidth(bits_)
 		}
 	}
+	// TODO: thesis depth instead of height
+	def mulPredicate(cutoffTest: (CBDD,Int,Int)=>Boolean)(findBounds: Boolean)(that : IntLikeSet[I, T]) = {
+		import int.{ mkNumericOps, mkOrderingOps }
+		import cc.sven.interval.Interval._
+		val ivalInt = implicitly[Arith[Interval[I]]]
+		val ivalSet1 = toIvalSetPredicate(cutoffTest)(findBounds)
+		val ivalSet2 = that.toIvalSetPredicate(cutoffTest)(findBounds)
+
+		val bits_ = bits * 2
+		//assert(bits_ <= implicitly[BoundedBits[I]].bits)
+		val ivalRes = for{
+			a <- ivalSet1
+			b <- ivalSet2
+		} yield {
+			//(a * b)
+			(a, b) match {
+				case (EmptyIval, _) => EmptyIval
+				case (_, EmptyIval) => EmptyIval
+				case (FilledIval(lo1, hi1), FilledIval(lo2, hi2)) => {
+					//force BigInt operation because fuck it - I want results!
+					//this will have a special place int he hall of shame
+					//XXX SCM : Change this horrible thing!
+					val a = BigInt(lo1.toLong) * BigInt(lo2.toLong)
+					val b = BigInt(lo1.toLong) * BigInt(hi2.toLong)
+					val c = BigInt(hi1.toLong) * BigInt(lo2.toLong)
+					val d = BigInt(hi1.toLong) * BigInt(hi2.toLong)
+					val lo = a min b min c min d
+					val hi = a max b max c max d
+					val a_ = lo1 * lo2
+					val b_ = lo1 * hi2
+					val c_ = hi1 * lo2
+					val d_ = hi1 * hi2
+					val lo_ = a_ min b_ min c_ min d_
+					val hi_ = a_ max b_ max c_ max d_
+					val lo__ = if(BigInt(lo_.toLong) != lo) bounded.minBound else lo_
+					val hi__ = if(BigInt(hi_.toLong) != hi) bounded.maxBound else hi_
+					FilledIval(lo__, hi__)
+				}
+			}
+		}
+
+		(IntLikeSet[I, T](bits_) /: ivalRes){
+			case (acc, EmptyIval) => acc
+			case (acc, FilledIval(lo, hi)) => acc union IntLikeSet.range[I, T](bits_ min boundedBits.bits, lo, hi).changeBitWidth(bits_)
+		}
+	}
+
+	def toIvalSetPredicate(cutoffTest: (CBDD,Int,Int)=>Boolean)(findBounds: Boolean): Set[Interval[I]] = {
+		val two = int.fromInt(2)
+
+		def pow( exp: Int): I = {
+			if (exp == 0) int.one else int.times(two, pow(exp - 1))
+		}
+
+		def calcEnd(start: I, height: Int): I = {
+			int.minus(int.plus(start, pow(height)), int.one)
+		}
+
+		def helper(bdd: CBDD, height: Int, depth: Int, start: I): Set[Interval[I]] = bdd match {
+			case False => Set()
+			case True =>
+				Set(FilledIval(start, calcEnd(start, height)))
+			case n@Node(set, uset) => {
+				if (cutoffTest(n, height, depth)) {
+					if (findBounds) {
+						val lo = (IntSet.toBitVector(start).take(boundedBits.bits - height) ++ n.falseMost.get).padTo(bits, false)
+						val hi = (IntSet.toBitVector(start).take(boundedBits.bits - height) ++ n.trueMost.get).padTo(bits, true)
+
+						Set(FilledIval(IntSet.fromBitVector(lo), IntSet.fromBitVector(hi))) // TODO
+					} else {
+						Set(FilledIval(start, calcEnd(start, height)))
+					}
+
+				} else {
+					helper(set, height - 1, depth + 1, int.plus(start, pow(height - 1))) union helper(uset, height - 1, depth + 1, start)
+				}
+			}
+		}
+
+		val bdd = getBWCBDD
+		helper(bdd, bits, 0, int.zero)
+	}
+
+
 
 	def toIvalSetP(precision: Double): Set[Interval[I]] = {
 		val two = int.fromInt(2)
@@ -387,12 +453,11 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 		def helper(bdd: CBDD, height: Int, start: I): Set[Interval[I]] = bdd match {
 			case False => Set()
 			case True =>
-				println(s"Start: $start, $height")
 				Set(FilledIval(start, calcEnd(start, height)))
 			case n@Node(set, uset) => {
 				val approxSize = if (height == 64) Long.MaxValue else 1L << height
 				val actualSize = count(n, height)
-				println(s"$actualSize, $approxSize ${actualSize.toDouble / approxSize}")
+
 				if ((actualSize.toDouble / approxSize).abs >= precision) {
 					val lo = (IntSet.toBitVector(start).take(bits - height) ++ n.falseMost.get).padTo(bits, false)
 					val hi = (IntSet.toBitVector(start).take(bits - height) ++ n.trueMost.get).padTo(bits, true)
@@ -451,7 +516,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 
 	def mulSingleton4(op : T) : IntLikeSet[I, T] = {
 		val (opBits, opI) = castTI(op)
-		assert(opBits == bits)
+		assert(opBits == bits, s"$opBits != $bits")
 		val bits_ = boundedBits.bits
 		// println(s"$set * $op")
 		val x_ = IntSet.toBitVector(opI).drop(boundedBits.bits - bits_)
@@ -459,12 +524,16 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 
 		//only positive for now...
 		//require(!opBools.head)
+		def takeFkt(cbdd : CBDD) : CBDD = cbdd.take(boundedBits.bits)
+		def reduceFkt(a : CBDD, b : CBDD) = a || b
 
-		val res = fromBWCBDD(mulHelper4(set.cbdd, opI, opBools, incomingEdge = false, 0, List.fill(opBools.length)(false)))
+		val bdd = mulHelper4(set.cbdd, opI, opBools, incomingEdge = false, 0, List.fill(opBools.length)(false))
+		val res = new IntLikeSet[I, T](bits, new IntSet[I](bdd))
+		println(s"$set*$op=${res.set}")
 		res
 		// ???
 	}
-
+	// TODO ist das von mir?
 	def signExtend(bdd: CBDD, depth : Int) : CBDD =  {
 		def helper(h : Int, t : Boolean, b : CBDD) : CBDD = (h,t) match {
 			case (0, _) => b
@@ -869,6 +938,21 @@ object IntLikeSet {
 			}
 		}
 		range[java.lang.Long, T](lo, hi)(cc.sven.integral.Implicits.jLongIsIntegral, cc.sven.bounded.Bounded.jLongIsBounded, cc.sven.bounded.BoundedBits.jLongIsBoundedBits, dboundedBits, castTIT, castITT)
+	}
+
+	def precisionPredicate(precision: Double)(node: CBDD, height: Int, depth: Int): Boolean = {
+		def count(bdd: CBDD, height: Int): Long = {
+			bdd.truePaths.map(l => 1L << (height - l.length)).sum
+		}
+
+		val approxSize = if (height == 64) Long.MaxValue else 1L << height
+		val actualSize = count(node, height)
+
+		(actualSize.toDouble / approxSize).abs >= precision
+	}
+
+	def heightPredicate(cutoff: Int)(node: CBDD, height: Int, depth: Int): Boolean = {
+		depth > cutoff
 	}
 }
 

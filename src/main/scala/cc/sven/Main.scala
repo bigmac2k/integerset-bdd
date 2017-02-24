@@ -370,18 +370,23 @@ object Main {
     bw.close()
   }
 
+  def toIntSet(a: Set[Int]): IntLikeSet[Long, NBitLong] = {
+    val aBounded = a.map(x => NBitLong.bound(x.toLong, 64))
+    (IntLikeSet[Long, NBitLong](64) /: aBounded) ((acc, x) => acc + NBitLong(64, x))
+  }
+
   def mul(a: Set[Int], y: Int): Set[Long] = {
     val aBounded = a.map(x => NBitLong.bound(x.toLong, 64))
     val a_ = (IntLikeSet[Long, NBitLong](64) /: aBounded) ((acc, x) => acc + NBitLong(64, x))
     val b_ = NBitLong.bound(y.toLong, 64)
     var start = System.nanoTime()
-    val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 + x._2)
+
 
     //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
     val us = a_.mulSingleton4(NBitLong(64, b_.toLong))
 
     val castIT = implicitly[Castable[(Int, Long), NBitLong]]
-    val ref_ = ref.map((x: Long) => castIT((64, x)))
+
     us.set
   }
 
@@ -393,8 +398,8 @@ object Main {
     //benchmarkSuiteLengths("benchmarks", r.nextInt(1 << 12), 0 to (2000000, 50000), List(1L << 5, 1L << 10, 1L << 20), 64)
     //benchmarkSuiteStrides("benchmarks", 0, List(1L << 15), (1 to ((1 << 15) - 1, 1)).map(_.toLong), 16)
     //benchmark("benchmark_height_numrecursion.csv")
-     Main.testStrideRecognition.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
-    mul(Set(7,18,19),-3)
+    // Main.testStrideRecognition.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
+    mul(Set(6, 4, 5, 0, 1, 2, 3),4)
     val stride = findStrideMemo(CBDD.constructStridedInterval(0,1L<<15,2,16), 16)
     //Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
     println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
