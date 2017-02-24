@@ -1,24 +1,29 @@
 package cc.sven.interval
 
-import scala.math.{ Integral, Fractional }
+import scala.math.{ Integral }
 
 sealed trait Interval[+T]
+
+/** Class for nonempty intervals. Can not be extended. Extends Interval.
+  * Defines toString method, equality check, hashCode method.
+  *
+  * @param lo lower bound
+  * @param hi higher bound
+  * @tparam T parameter type
+  */
 final class FilledIval[+T](val lo : T, val hi : T) extends Interval[T] {
   override def toString = "[" + lo + " .. " + hi + "]"
   override def equals(that : Any) = that match {
-    /* Wow holy shit! I must have been drunk out of my mind!
-     * The following bug took about 45 Minutes to find
-     * I feel really bad...
-     * It's raining outside.
-     * It's grey.
-     * More coffee...
-    case ival : FilledIval[T] => ival.lo == ival.hi 
-    */
     case ival : FilledIval[T] => lo == ival.lo && hi == ival.hi
     case _ => false
   }
   override def hashCode = (lo, hi).hashCode
 }
+
+/** Nonempty interval extractor object.
+  * Given two ordered bound values, defines application as creating interval with appropriate bounds.
+  * Given an interval, defines extraction as returning low and high bounds if interval nonempty, else None.
+  */
 object FilledIval {
   def apply[T](lo : T, hi : T)(implicit ord : Ordering[T]) : FilledIval[T] = {
     import ord.mkOrderingOps
@@ -29,8 +34,16 @@ object FilledIval {
     case fival  : FilledIval[T] => Some(fival.lo, fival.hi)
   }
 }
+
 case object EmptyIval extends Interval[Nothing]
 
+/** Trait of arithmetic objects.
+  * Methods for arithmetic operations (+, -, *, /, negation) on given type have to be provided.
+  * Implicitly defines shorthands for arithmetic operations.
+  * Used by Interval.
+  *
+  * @tparam T type of arithmetic object
+  */
 trait Arith[T] {
   def plus(a : T, b : T) : T
   def minus(a : T, b : T) : T
@@ -48,6 +61,13 @@ trait Arith[T] {
   }
 }
 
+/**
+  * Abstract class for arithmetic opertions.
+  * Used by Arith.
+  *
+  * @param lhs left hand side of operation
+  * @tparam T parameter type
+  */
 abstract class ArithOps[T](lhs : T) {
   def +(rhs : T) : T
   def -(rhs : T) : T
@@ -56,6 +76,10 @@ abstract class ArithOps[T](lhs : T) {
   def unary_- : T
 }
 
+/** Interval object.
+  * Implicitly defines methods for arithmetic operations (+, -, *, /, negation).
+  * Defines interval arithmetic, returning resulting interval if arguments are proper, else empty interval.
+  */
 object Interval {
   implicit def arithFromIntegral[T](implicit int : Integral[T]) = new Arith[T] {
     def plus(a : T, b : T) : T = int.mkNumericOps(a) + b

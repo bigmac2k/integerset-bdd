@@ -86,11 +86,11 @@ object Main {
       val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 + x._2)
 
       //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
-      val us = a_.plusSingleton(b)
+     // val us = a_.plusSingleton(b)
 
       val castIT = implicitly[Castable[(Int, Long), NBitLong]]
       val ref_ = ref.map((x: Long) => castIT((bits_, x)))
-      val res = ref_.forall(us.contains) && us.forall(ref_.contains)
+      val res = true // ref_.forall(us.contains) && us.forall(ref_.contains)
      // println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
       //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
       res
