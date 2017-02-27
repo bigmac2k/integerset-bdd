@@ -1,5 +1,7 @@
 package cc.sven
 import java.io.{BufferedWriter, File, FileWriter}
+import java.text.SimpleDateFormat
+import java.util.Calendar
 
 import cc.sven.bounded.{Bounded, BoundedBits, DynBoundedBits}
 import cc.sven.tlike.{Castable, IntLikeSet}
@@ -18,16 +20,18 @@ object Evaluator {
                                                             boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T],
                                                             castTI : Castable[T, Pair[Int, I]], castIT : Castable[Pair[Int, I], T]) = {
 
-    val precise = for{
+   /* val precise = for{
       a <- a.set
       b <- b.set
-    } yield castIT(boundedBits.bits, int.times(a, b))
-
+    } yield castIT(boundedBits.bits, int.times(a, b)) */
+    val precise = Set()
 
     val reference = a.mul(elems, depths)(b)
 
-    val heightResult = testGeneralHeight(a, b)
-    val precisionResult = testGeneralPrecision(a, b)
+    val heightResultBounds = testGeneralHeight(a, b, true)
+    val precisionResultBounds = testGeneralPrecision(a, b, true)
+    val heightResult = testGeneralHeight(a, b, false)
+    val precisionResult= testGeneralPrecision(a, b, false)
     val aSize = a.sizeBigInt
     val bSize = b.sizeBigInt
 
@@ -42,31 +46,44 @@ object Evaluator {
       -1
     }
 
-    writer.write(s"$aSize;$bSize;${isSingleton};${precise.size};${reference.size};${formatPrecisionParameters(heightResult)};" +
-      s"${formatPrecisionParameters(precisionResult)};${singletonResult}\n")
+    writer.write(s"$aSize;$bSize;${isSingleton};${precise.size};${reference.sizeBigInt};${formatPrecisionParameters(heightResult)};" +
+      s"${formatPrecisionParameters(heightResultBounds)};${formatPrecisionParameters(precisionResult)};" +
+      s"${formatPrecisionParameters(precisionResultBounds)};${singletonResult}\n")
     writer.flush()
   }
 
-  def formatPrecisionParameters[T](list: List[(T,Int)]): String = {
+  def formatPrecisionParameters[T](list: List[(T,BigInt)]): String = {
     list.map(x=>s"${x._1}=>${x._2}").mkString(",")
   }
 
-  def testGeneralHeight[I,T](a: IntLikeSet[I,T], b: IntLikeSet[I,T])(implicit int : Integral[I], bounded : Bounded[I],
+  def testGeneralHeight[I,T](a: IntLikeSet[I,T], b: IntLikeSet[I,T], findBounds: Boolean)(implicit int : Integral[I], bounded : Bounded[I],
                                                boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T],
-                                               castTI : Castable[T, Pair[Int, I]], castIT : Castable[Pair[Int, I], T]): List[(Int,Int)] = {
-    (0 to 30 by 5).map(p=>(p, a.mulPredicate(IntLikeSet.heightPredicate(p))(true)(b).size)).toList
+                                               castTI : Castable[T, Pair[Int, I]], castIT : Castable[Pair[Int, I], T]): List[(Int,BigInt)] = {
+    (0 to 20 by 5).map({p=>println(s"$currentTime: Height: $p, findBound: $findBounds");(p, a.mulPredicate(IntLikeSet.heightPredicate(p))(findBounds)(b).sizeBigInt)}).toList
+
   }
 
-  def testGeneralPrecision[I,T](a: IntLikeSet[I,T], b: IntLikeSet[I,T])(implicit int : Integral[I], bounded : Bounded[I],
+  def testGeneralPrecision[I,T](a: IntLikeSet[I,T], b: IntLikeSet[I,T], findBounds: Boolean)(implicit int : Integral[I], bounded : Bounded[I],
                                                   boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T],
-                                                  castTI : Castable[T, Pair[Int, I]], castIT : Castable[Pair[Int, I], T]): List[(Double,Int)] = {
+                                                  castTI : Castable[T, Pair[Int, I]], castIT : Castable[Pair[Int, I], T]): List[(Double,BigInt)] = {
 
-    (0.125 to 1 by 0.125).map(p=>(p, a.mulPredicate(IntLikeSet.precisionPredicate(p))(true)(b).size)).toList
+    (0.125 to 1 by 0.125).map({p=>println(s"$currentTime: Precision: $p, findBound: $findBounds");(p, a.mulPredicate(IntLikeSet.precisionPredicate(p))(findBounds)(b).sizeBigInt)}).toList
+
   }
 
   def testSingleton[I,T](a: IntLikeSet[I,T], b: T)(implicit int : Integral[I], bounded : Bounded[I],
                                            boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T],
                                            castTI : Castable[T, Pair[Int, I]], castIT : Castable[Pair[Int, I], T]): BigInt = {
-    a.mulSingleton4(b).size
+    println(s"$currentTime: Singleton multiplication started")
+    val res = a.mulSingleton4(b).sizeBigInt
+    println(s"$currentTime: Singleton multiplication finished")
+    res
+
+  }
+
+  def currentTime = {
+    val now = Calendar.getInstance().getTime
+    val format = new SimpleDateFormat("hh:mm:ss:SS")
+    format.format(now)
   }
 }

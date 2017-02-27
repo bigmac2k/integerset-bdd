@@ -137,11 +137,12 @@ object Main {
   var stridedNaive = 1L
   var stridedOwn = 1L
   val testStridedInterval = forAll {
-    (start: Long, count: Int, stride: Long) =>
+    (stride: Int, start: Int, end: Int) =>
 
-      val stride_ = stride.abs.toLong max 1L
-      val start_ = start // (Long.MaxValue - 1 min start.toLong)
-      val count_ = (Long.MaxValue / stride_ * 2) % 100000
+      val stride_ = math.max(2L,stride.abs)
+      val start_ = math.min(start.abs,end.abs) // (Long.MaxValue - 1 min start.toLong)
+      val end_ = start_ + (end - start) / stride_ * stride_
+      val count_ = ((end_ - start_) / stride_) % 100000
       (count_ > 0) ==> {
         val bits = 64
         println("start: " + start_ + ", count: " + count_ + ", stride: " + stride_)
@@ -163,7 +164,7 @@ object Main {
         stridedNaive += System.nanoTime() - start
 
         val res = expected_.forall(us.contains) && us.forall(expected_.contains)
-        if (!res) println("Wrong: start: " + start_ + ", count: " + count_ + ", stride: " + stride_)
+        if (!res) println("Wrong: start: " + start_ + "end: " + end_ + ", count: " + count_ + ", stride: " + stride_)
         res
       }
   }
@@ -376,14 +377,14 @@ object Main {
   }
 
   def mul(a: Set[Int], y: Int): Set[Long] = {
-    val aBounded = a.map(x => NBitLong.bound(x.toLong, 64))
-    val a_ = (IntLikeSet[Long, NBitLong](64) /: aBounded) ((acc, x) => acc + NBitLong(64, x))
-    val b_ = NBitLong.bound(y.toLong, 64)
+    val aBounded = a.map(x => NBitLong.bound(x.toLong, 32))
+    val a_ = (IntLikeSet[Long, NBitLong](32) /: aBounded) ((acc, x) => acc + NBitLong(32, x))
+    val b_ = NBitLong.bound(y.toLong, 32)
     var start = System.nanoTime()
 
 
     //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
-    val us = a_.mulSingleton4(NBitLong(64, b_.toLong))
+    val us = a_.mulSingleton4(NBitLong(32, b_.toLong))
 
     val castIT = implicitly[Castable[(Int, Long), NBitLong]]
 
@@ -392,20 +393,25 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     fastGcd(List(6,32,16,4))
-
+    val iset = new IntLikeSet[Long, Long](64, new IntSet[Long](intervalSet(38))) - ((1L<<26)-1) + (-1L)
+    val iset2 = iset.mulSingleton4(4)
     val r = scala.util.Random
-    val t = CBDD.constructStridedInterval(0, 1L << 15, 2000, 16)
+  //  val t = CBDD.constructStridedInterval(0, 1L << 15, 2000, 16)
     //benchmarkSuiteLengths("benchmarks", r.nextInt(1 << 12), 0 to (2000000, 50000), List(1L << 5, 1L << 10, 1L << 20), 64)
     //benchmarkSuiteStrides("benchmarks", 0, List(1L << 15), (1 to ((1 << 15) - 1, 1)).map(_.toLong), 16)
     //benchmark("benchmark_height_numrecursion.csv")
-    // Main.testStrideRecognition.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
-    mul(Set(6, 4, 5, 0, 1, 2, 3),4)
-    val stride = findStrideMemo(CBDD.constructStridedInterval(0,1L<<15,2,16), 16)
+   // Main.testStridedInterval.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
+    mul(Set(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31),1717986919)
+   // val stride = findStrideMemo(CBDD.constructStridedInterval(0,1L<<15,2,16), 16)
     //Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
     println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
     println(s"Own: ${stridedOwn} ns / ${stridedOwn / 1000000} ms (${stridedOwn.toDouble / stridedNaive}x ")
 
     val bla = IntSet[Int](0,3,7).cbdd
+
+    val testSet = IntLikeSet.range[Long,NBitLong](32,15L,2147483647L)
+    val testResult = testSet.mulPredicate(IntLikeSet.precisionPredicate(0.9))(true)(testSet)
+    println(testResult)
     //val stride = findStride(bla, 32)
     //val test = constructStridedInterval(300, 1000, 7, 64)._1
     //val bla = isCongruenceInterval(test, 64)
@@ -444,6 +450,14 @@ object Main {
 
     //val x = constructStridedIntervalMemo(0, 1L<<31, 2, 32)
     println()
+  }
+
+  def intervalSet(depth: Int): CBDD = {
+    if (depth <= 0) {
+      True
+    } else {
+      Node(False, intervalSet(depth - 1))
+    }
   }
 
   def memoize[I, O](f: I => O): I => O = new mutable.HashMap[I, O]() {

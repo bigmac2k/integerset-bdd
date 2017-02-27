@@ -619,6 +619,7 @@ object CBDD {
     }
   }
 
+
   def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : CBDD = {
     lazy val strideCache = new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
     var start_ = start
@@ -626,8 +627,6 @@ object CBDD {
       start_ = start + (count - 1) * stride
     }
     val stride_ = stride.abs
-
-
 
     def helper2(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
      // require(toBeConsumed >= 0)
@@ -642,8 +641,8 @@ object CBDD {
         (Node(bddT, bddF), leftT, countF + countT)
       } else {
         (False, remaining, 0)
-      }*/
-
+      }
+      */
       if (length <= 0) return (False, toBeConsumed, 0)
       if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
 
