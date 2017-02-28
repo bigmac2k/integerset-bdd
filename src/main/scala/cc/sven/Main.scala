@@ -27,9 +27,9 @@ object Main {
         val interval = ((1 << k_) + offset) until ((1 << (k_ + 1)) + offset)
         val interval2 = ((1 << k_) + offset2) until ((1 << (k_ + 1)) + offset2)
         val longBits = implicitly[BoundedBits[Long]].bits
-        val bits_ = 64 // 32 min ((NBitLong.boundBits(bits) / 2) max 1)
+        val bits_ = 32 // 32 min ((NBitLong.boundBits(bits) / 2) max 1)
 
-        val aBounded = (a ++ interval ++ interval2).map(x => NBitLong.bound(x.toLong, bits_)) // TODO
+        val aBounded = (a).map(x => NBitLong.bound(x.toLong & ((1L<<31) -1), bits_)) // TODO
 
         val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
         val b_ = NBitLong.bound(if (b==0) 5 else b, bits_)
@@ -55,11 +55,11 @@ object Main {
         duration4 += System.nanoTime() - start
 
         start = System.nanoTime()
-        val ns = a_.mulNaive(IntLikeSet[Long, NBitLong](bits_) + NBitLong(bits_, b_.toLong))
+//        val ns = a_.mulNaive(IntLikeSet[Long, NBitLong](bits_) + NBitLong(bits_, b_.toLong))
         durationNaive += System.nanoTime() - start
 
         val castIT = implicitly[Castable[(Int, Long), NBitLong]]
-        val ref_ = ref.map((x: Long) => castIT((bits_, x)))
+        val ref_ = ref.map((x: Long) => castIT((64, x)))
         val res = ref_.forall(us4.contains) // ref_.forall(us3.contains) && ref_.forall(us.contains) && ref_.forall(us2.contains) &&
         //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4 + ", ref: " + ref_ + ", result: " + res)
         if(!res) println("Fail inputa_: " + a_.set + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4.set + ", ref: " + ref_ + ", result: " + res)
@@ -394,16 +394,17 @@ object Main {
   def main(args: Array[String]): Unit = {
     fastGcd(List(6,32,16,4))
     val iset = new IntLikeSet[Long, Long](64, new IntSet[Long](intervalSet(38))) - ((1L<<26)-1) + (-1L)
-    val iset2 = iset.mulSingleton4(4)
+    //val iset2 = iset.mulSingleton4(4)
+    mul(Set(0,1),-1)
     val r = scala.util.Random
   //  val t = CBDD.constructStridedInterval(0, 1L << 15, 2000, 16)
     //benchmarkSuiteLengths("benchmarks", r.nextInt(1 << 12), 0 to (2000000, 50000), List(1L << 5, 1L << 10, 1L << 20), 64)
     //benchmarkSuiteStrides("benchmarks", 0, List(1L << 15), (1 to ((1 << 15) - 1, 1)).map(_.toLong), 16)
     //benchmark("benchmark_height_numrecursion.csv")
-   // Main.testStridedInterval.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
+    Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
     mul(Set(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31),1717986919)
    // val stride = findStrideMemo(CBDD.constructStridedInterval(0,1L<<15,2,16), 16)
-    //Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
+   // Main.test.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(200))
     println(s"Naive: ${stridedNaive} ns / ${stridedNaive / 1000000} ms")
     println(s"Own: ${stridedOwn} ns / ${stridedOwn / 1000000} ms (${stridedOwn.toDouble / stridedNaive}x ")
 

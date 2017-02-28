@@ -679,14 +679,14 @@ object CBDD {
         result = result || Node(res, False)
         totalCount += c
         start_ = left
-        /*if (c < maxCount) {
+        if (c < maxCount) {
           val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
           totalCount += c2
           result = result || Node(res, res2)
         } else {
           result = result || Node(res, False)
         }
-        */
+
       } else {
         val (res, left, c) = helper2(start_, height, maxCount - totalCount)
         result = result || res
@@ -696,10 +696,18 @@ object CBDD {
     } while (totalCount < count) */
 
     if (start_ < 0) {
-      val start__ = start_ + (1L << (height - 2)) + (1L << (height - 2))
-      // not in right subtree. TODO wrap around
+      val start__ = start_ + (1L << (height - 2)) + (1L << (height - 2)) // not in right subtree. TODO wrap around
       val (res, left, c) = helper2(start__, height - 1, maxCount)
-      Node(res, False)
+      result = result || Node(res, False)
+      totalCount += c
+      start_ = left
+      if (c < maxCount) {
+        val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
+        totalCount += c2
+        result || Node(res, res2)
+      } else {
+        result || Node(res, False)
+      }
     } else {
       val (res, left, c) = helper2(start_, height, maxCount - totalCount)
       res

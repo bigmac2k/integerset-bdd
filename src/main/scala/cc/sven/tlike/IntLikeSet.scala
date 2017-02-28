@@ -225,14 +225,28 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 
 	def mult(elems : Int, depths_ : Int)(that : IntLikeSet[I, T]): IntLikeSet[I,T] = {
 		println("Multiplication!")
-	  Evaluator.evaluate(this, that, elems, depths_)
+		println(elems, depths_)
+	  val res = Evaluator.evaluate(this, that, elems, depths_)
 
 		def isSingleton(x: IntSet[I]): Boolean = x.remove(x.randomElement()).isEmpty
 
+		val ref = mul(elems, depths_)(that)
 		if (isSingleton(that.set)) {
-			this.mulSingleton4(that.randomElement())
+			//val res = this.mulSingleton4(that.randomElement())
+			val correct = res.subsetOf(ref)
+			println(s"Correct: $correct")
+			if (!correct) {
+				println(res intersect !ref)
+			}
+			res
 		} else if (isSingleton(this.set)) {
-			that.mulSingleton4(this.randomElement())
+			//val res = that.mulSingleton4(this.randomElement())
+			val correct = res.subsetOf(ref)
+			println(s"Correct: $correct")
+			if (!correct) {
+				println(res intersect !ref)
+			}
+			res
 		} else {
 			this.mulPredicate(IntLikeSet.precisionPredicate(0.9))(true)(that)
 		}
@@ -524,17 +538,23 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 	def mulSingleton4(op : T) : IntLikeSet[I, T] = {
 		val (opBits, opI) = castTI(op)
 		assert(opBits == bits, s"$opBits != $bits")
-		println(opBits, bits, boundedBits.bits, set.cbdd.depth)
-		val bits_ = boundedBits.bits
+		println(opBits, bits, boundedBits.bits, getBWCBDD.depth)
+		val bits_ = boundedBits.bits min 2*bits
 
-		val x_ = IntSet.toBitVector(opI).drop(boundedBits.bits - bits_)
-		val opBools = x_.reverse.padTo(boundedBits.bits, false).reverse
+		val x_ = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
+		val opBools = x_.reverse.padTo(bits_, x_.head).reverse
 
 		//only positive for now...
 		//require(!opBools.head)
+		val opBdd = getBWCBDD match {
+			case True => True
+			case False => False
+			case Node(set, uset) =>
+				CBDD(List.fill(bits_ - bits + 1)(true), False, False, set) || CBDD(List.fill(bits_ - bits + 1)(false), False, False, uset)
+		}
 
-		val bdd = mulHelper4(set.cbdd, opI, opBools, incomingEdge = false, 0, List.fill(opBools.length)(false))
-		val res = new IntLikeSet[I, T](boundedBits.bits, new IntSet[I](bdd))
+		val bdd = mulHelper4(opBdd, IntSet.fromBitVector[Long](opBools), opBools, incomingEdge = false, 0, List.fill(opBools.length)(false))
+		val res = new IntLikeSet[I, T](bits_, new IntSet[I](bdd))
 		//println(s"$set*$op=${res.set}")
 		println(s"$this * $op=$res")
 		res
@@ -593,9 +613,9 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 			}
 	}
 
-	def mulHelper4(bdd: CBDD, opI : I, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : List[Boolean]) : CBDD = {
+	def mulHelper4(bdd: CBDD, opI : Long, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : List[Boolean]) : CBDD = {
 
-		val bits_ = boundedBits.bits
+		val bits_ = 2*bits // boundedBits.bits
 		val k = bits_ - height
 		// println(s"Level: ${k} ${bdd}")
 		lazy val shiftedOp = op.drop(k) ++ List.fill(k)(false)
@@ -610,10 +630,10 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 				}*/
 			case True =>
 				val result = if (incomingEdge) {
-					CBDD.constructStridedInterval(int.toLong(IntSet.fromBitVector(shiftedOp)), 1L << k, int.toLong(opI), bits_)
+					CBDD.constructStridedInterval(int.toLong(IntSet.fromBitVector(shiftedOp)), 1L << k, opI, bits_)
 
 				} else {
-					CBDD.constructStridedInterval(0, 1L << k, int.toLong(opI), bits_)
+					CBDD.constructStridedInterval(0, 1L << k, opI, bits_)
 				}
 				result
 			case Node(s, uset) =>
