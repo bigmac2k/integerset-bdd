@@ -1,5 +1,7 @@
 package cc.sven.bdd
 
+import cc.sven.{DoubleLinkedLFUCache, HashCodeIdentifier, Identifier}
+
 import scala.collection.mutable.WeakHashMap
 import scala.ref._
 import cc.sven.misc.unsignedLongToBigInt
@@ -587,7 +589,7 @@ object CBDD {
 
 // this is probably not correct
   def plusSingleton(op1: CBDD, op2: List[Boolean], depth: Int): CBDDTuple = {
-
+    println(op1, op2, depth)
     (op1, op2) match {
       case (False, _) => (False, False)
       case (True, Nil) =>
@@ -618,10 +620,11 @@ object CBDD {
       }
     }
   }
-
+  //lazy val strideCache = new DoubleLinkedLFUCache[(CBDD, Long, Long), (Long, Long, Long)](100000)
 
   def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : CBDD = {
-    lazy val strideCache = new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
+
+    lazy val strideCache = new DoubleLinkedLFUCache[(CBDD, Long, Long), (Long, Long, Long)](5000) //new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
     var start_ = start
     if (stride < 0L) {
       start_ = start + (count - 1) * stride
@@ -654,12 +657,14 @@ object CBDD {
           val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length)
           val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF)
           (Node(bddT, bddF), leftT, countF + countT)
+
         } else {
-          strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {
+          val res = strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {
             val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length) // strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {helper2(toBeConsumed, h - 1, length)})
             val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF) //strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {helper2(leftF, h - 1, length - countF)})
             (Node(bddT, bddF), leftT, countF + countT)
           })
+          res
         }
       } else {
         (False, remaining, 0)

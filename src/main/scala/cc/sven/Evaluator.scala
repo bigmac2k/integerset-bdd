@@ -9,7 +9,7 @@ import cc.sven.tlike.{Castable, IntLikeSet}
 
 
 object Evaluator {
-  val file = new File(s"evaluation_${System.currentTimeMillis()}.csv")
+  val file = new File(s"evaluation_${startTime}.csv")
   val writer = new BufferedWriter(new FileWriter(file))
 
   {
@@ -107,6 +107,12 @@ object Evaluator {
   def currentTime = {
     val now = Calendar.getInstance().getTime
     val format = new SimpleDateFormat("hh:mm:ss:SS")
+    format.format(now)
+  }
+
+  def startTime = {
+    val now = Calendar.getInstance().getTime
+    val format = new SimpleDateFormat("dd-MM_hh-mm-ss")
     format.format(now)
   }
 }
