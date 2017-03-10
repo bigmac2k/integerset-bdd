@@ -5,6 +5,7 @@ import java.nio.file.Paths
 import cc.sven.bdd._
 import cc.sven.bounded.BoundedBits
 import cc.sven.intset.IntSet
+
 import cc.sven.tlike.{IntLikeSet, NBitLong, _}
 import org.scalacheck.Prop.{BooleanOperators, forAll}
 import org.scalacheck.Test
@@ -18,59 +19,68 @@ object Main {
   var duration4 = 0L
   var durationRef = 1L
   var durationNaive = 1L
-  val test = forAll{
+  val testSingleton = forAll{
     (a : Set[Int], b : Int, k : Int, offset : Int, offset2 : Int, bits: Int) =>
       (b >0) ==> {
-       // println("Test")
-        val k_ = (k.abs % 12) max 1
-
-        val interval = ((1 << k_) + offset) until ((1 << (k_ + 1)) + offset)
-        val interval2 = ((1 << k_) + offset2) until ((1 << (k_ + 1)) + offset2)
         val longBits = implicitly[BoundedBits[Long]].bits
         val bits_ = 32 // 32 min ((NBitLong.boundBits(bits) / 2) max 1)
 
-        val aBounded = (a).map(x => NBitLong.bound(x.toLong & ((1L<<31) -1), bits_)) // TODO
+        val aBounded = a.map(x => NBitLong.bound(x.toLong & ((1L<<31) -1), bits_))
 
         val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
         val b_ = NBitLong.bound(if (b==0) 5 else b, bits_)
         var start = System.nanoTime()
         val ref = cartesianProduct(aBounded, Set(b_.toLong)).map((x) => x._1 * x._2)
-        durationRef += System.nanoTime() - start
-        //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
 
-        start = System.nanoTime()
-        //val us = a_.mulSingleton(NBitLong(bits_, b))
-        duration += System.nanoTime() - start
-
-        start = System.nanoTime()
-     //   val us2 = a_.mulSingleton2(NBitLong(bits_, b))
-        duration2 += System.nanoTime() - start
-
-        start = System.nanoTime()
-       // val us3 = a_.mulSingleton3(NBitLong(bits_, b))
-        duration3 += System.nanoTime() - start
-
-        start = System.nanoTime()
-        val us4 = a_.mulSingleton4(NBitLong(bits_, b_))
-        duration4 += System.nanoTime() - start
-
-        start = System.nanoTime()
-//        val ns = a_.mulNaive(IntLikeSet[Long, NBitLong](bits_) + NBitLong(bits_, b_.toLong))
-        durationNaive += System.nanoTime() - start
+        val us = a_.mulSingleton(NBitLong(bits_, b_))
 
         val castIT = implicitly[Castable[(Int, Long), NBitLong]]
         val ref_ = ref.map((x: Long) => castIT((64, x)))
-        val res = ref_.forall(us4.contains) // ref_.forall(us3.contains) && ref_.forall(us.contains) && ref_.forall(us2.contains) &&
-        //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4 + ", ref: " + ref_ + ", result: " + res)
-        if(!res) println("Fail inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us4 + ", ref: " + ref_ + ", result: " + res)
-
-        c = c + 1
+        val res = ref_.forall(us.contains)
+        if(!res) println("Fail inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
         res
       }
   }
-  var c = 0
 
-  val testSingleton = forAll{
+  val testGeneralDepth = forAll{
+    (a : Set[Long], b : Set[Long], bits : Int, depths : Int) =>
+      val longBits = implicitly[BoundedBits[Long]].bits
+      val bits_ = (NBitLong.boundBits(bits) / 2) max 1
+      val depths_ = NBitLong.boundBits(depths).abs % bits_
+      val aBounded = a.map(NBitLong.bound(_, bits_))
+      val bBounded = b.map(NBitLong.bound(_, bits_))
+      val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded)((acc, x) => acc + NBitLong(bits_, x))
+      val b_ = (IntLikeSet[Long, NBitLong](bits_) /: bBounded)((acc, x) => acc + NBitLong(bits_, x))
+      val ref = cartesianProduct(aBounded, bBounded).map((x) => x._1 * x._2)
+      //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
+      val us = a_.mulPredicate(DepthPredicate(depths_))(false)(b_)
+      val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+      val ref_ = ref.map((x : Long) => castIT((bits_ * 2, x)))
+      val res = ref_.forall(us.contains)
+      if(!res) println("Wrong: inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+      res
+  }
+
+  val testGeneralPrecision= forAll{
+    (a : Set[Long], b : Set[Long], bits : Int, precision : Double) =>
+      val longBits = implicitly[BoundedBits[Long]].bits
+      val bits_ = 32 // (NBitLong.boundBits(bits) / 2) max 1
+      val precision_ = precision - precision.toLong
+      val aBounded = a.map(NBitLong.bound(_, bits_))
+      val bBounded = b.map(NBitLong.bound(_, bits_))
+      val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded)((acc, x) => acc + NBitLong(bits_, x))
+      val b_ = (IntLikeSet[Long, NBitLong](bits_) /: bBounded)((acc, x) => acc + NBitLong(bits_, x))
+      val ref = cartesianProduct(aBounded, bBounded).map((x) => x._1 * x._2)
+      //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
+      val us = a_.mulPredicate(PrecisionPredicate(0.9))(true)(b_)
+      val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+      val ref_ = ref.map((x : Long) => castIT((bits_ * 2, x)))
+      val res = ref_.forall(us.contains)
+      if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + precision_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+      res
+  }
+
+  val testSingleton3 = forAll{
     (a : Set[Long], b : Long, k : Int, offset : Long) =>
       val k_ = 3
       println(k_)
@@ -111,7 +121,7 @@ object Main {
       val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 * x._2)
 
       println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ )
-      val us = a_.mulSingleton4(NBitLong(bits_, b_.toLong))
+      val us = a_.mulSingleton(NBitLong(bits_, b_.toLong))
 
       val castIT = implicitly[Castable[(Int, Long), NBitLong]]
       val ref_ = ref.map((x: Long) => castIT((bits_, x)))
@@ -372,8 +382,8 @@ object Main {
   }
 
   def toIntSet(a: Set[Int]): IntLikeSet[Long, NBitLong] = {
-    val aBounded = a.map(x => NBitLong.bound(x.toLong, 64))
-    (IntLikeSet[Long, NBitLong](64) /: aBounded) ((acc, x) => acc + NBitLong(64, x))
+    val aBounded = a.map(x => NBitLong.bound(x.toLong, 32))
+    (IntLikeSet[Long, NBitLong](32) /: aBounded) ((acc, x) => acc + NBitLong(32, x))
   }
 
   def mul(a: Set[Int], y: Int): Set[Long] = {
@@ -384,7 +394,7 @@ object Main {
 
 
     //println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
-    val us = a_.mulSingleton4(NBitLong(32, b_.toLong))
+    val us = a_.mulSingleton(NBitLong(32, b_.toLong))
 
     val castIT = implicitly[Castable[(Int, Long), NBitLong]]
 
@@ -392,11 +402,10 @@ object Main {
   }
 
   def main(args: Array[String]): Unit = {
-    mul(Set(5,6,7),4)
-    val manyNumbers = new IntLikeSet[Long, Long](32, new IntSet[Long](CBDD(List.fill(32)(false), False, False, True)))
-    println(manyNumbers.mulSingleton4(4))
-    fastGcd(List(6,32,16,4))
-
+    Main.testGeneralPrecision.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
+    val t = toIntSet(Set(-12140, 2147483647))
+    println(t.toIvalSetPredicate(DepthPredicate(5))(true))
+  /*
     val iset = new IntLikeSet[Long, Long](64, new IntSet[Long](intervalSet(38))) - ((1L<<26)-1) + (-1L)
     //val iset2 = iset.mulSingleton4(4)
   //  mul(Set(0,1),-1)
@@ -455,7 +464,7 @@ object Main {
     //val correct = ref.map((x:Long)=>castIT((bits, x))).forall(res.contains)
 
     //val x = constructStridedIntervalMemo(0, 1L<<31, 2, 32)
-    println()
+    println() */
   }
 
   def intervalSet(depth: Int): CBDD = {

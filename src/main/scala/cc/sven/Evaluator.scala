@@ -4,7 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 
 import cc.sven.bounded.{Bounded, BoundedBits, DynBoundedBits}
-import cc.sven.tlike.{Castable, IntLikeSet}
+import cc.sven.tlike.{Castable, DepthPredicate, IntLikeSet, PrecisionPredicate}
 
 
 
@@ -76,7 +76,7 @@ object Evaluator {
                                                castTI : Castable[T, Pair[Int, I]], castIT : Castable[Pair[Int, I], T]): List[(Int,(BigInt, T, T))] = {
     (0 to 10 by 5).map({ p =>
       println(s"$currentTime: Height: $p, findBound: $findBounds")
-      val res = a.mulPredicate(IntLikeSet.heightPredicate(p))(findBounds)(b)
+      val res = a.mulPredicate(DepthPredicate(p))(findBounds)(b)
       (p, (res.sizeBigInt, res.min, res.max))
     }).toList
 
@@ -88,7 +88,7 @@ object Evaluator {
 
     (0.125 to 1 by 0.25).map({ p =>
       println(s"$currentTime: Precision: $p, findBound: $findBounds")
-      val res = a.mulPredicate(IntLikeSet.precisionPredicate(p))(findBounds)(b)
+      val res = a.mulPredicate(PrecisionPredicate(p))(findBounds)(b)
       (p, (res.sizeBigInt, res.min, res.max))
     }).toList
 
@@ -98,7 +98,7 @@ object Evaluator {
                                            boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T],
                                            castTI : Castable[T, Pair[Int, I]], castIT : Castable[Pair[Int, I], T]): (IntLikeSet[I,T], BigInt, T, T) = {
     println(s"$currentTime: Singleton multiplication started")
-    val res = a.mulSingleton4(b)
+    val res = a.mulSingleton(b)
     println(s"$currentTime: Singleton multiplication finished")
     (res, res.sizeBigInt, res.min, res.max)
 

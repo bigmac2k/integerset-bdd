@@ -6,6 +6,7 @@ import scala.collection.mutable.WeakHashMap
 import scala.ref._
 import cc.sven.misc.unsignedLongToBigInt
 
+import scala.collection.immutable.::
 import scala.collection.mutable
 
 /** Trait of BDD objects.
@@ -589,7 +590,6 @@ object CBDD {
 
 // this is probably not correct
   def plusSingleton(op1: CBDD, op2: List[Boolean], depth: Int): CBDDTuple = {
-    println(op1, op2, depth)
     (op1, op2) match {
       case (False, _) => (False, False)
       case (True, Nil) =>
@@ -624,28 +624,14 @@ object CBDD {
 
   def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : CBDD = {
 
-    lazy val strideCache = new DoubleLinkedLFUCache[(CBDD, Long, Long), (Long, Long, Long)](5000) //new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
+    lazy val strideCache = new DoubleLinkedLFUCache[(CBDD, Long, Long), (Long, Long, Long)](50000) //new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
     var start_ = start
     if (stride < 0L) {
       start_ = start + (count - 1) * stride
     }
     val stride_ = stride.abs
 
-    def helper2(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
-     // require(toBeConsumed >= 0)
-
-    /*  if (length <= 0) return (False, toBeConsumed, 0)
-      if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
-      val remaining = if (h < 64) toBeConsumed - (1L << h) else -1 // overflow, if h>63 we can consume any 0<=x<=long.MaxValue
-
-      if (remaining < 0L) {
-        val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length)
-        val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF)
-        (Node(bddT, bddF), leftT, countF + countT)
-      } else {
-        (False, remaining, 0)
-      }
-      */
+    def helper(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
       if (length <= 0) return (False, toBeConsumed, 0)
       if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
 
@@ -654,14 +640,14 @@ object CBDD {
       if (remaining < 0L) {
         if (h == 64 || h == 63 || Math.ceil(((1L << h) - toBeConsumed) / stride_.toDouble) > length) { // TODO
           // don' memoize
-          val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length)
-          val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF)
+          val (bddF, leftF, countF) = helper(toBeConsumed, h - 1, length)
+          val (bddT, leftT, countT) = helper(leftF, h - 1, length - countF)
           (Node(bddT, bddF), leftT, countF + countT)
 
         } else {
           val res = strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {
-            val (bddF, leftF, countF) = helper2(toBeConsumed, h - 1, length) // strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {helper2(toBeConsumed, h - 1, length)})
-            val (bddT, leftT, countT) = helper2(leftF, h - 1, length - countF) //strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {helper2(leftF, h - 1, length - countF)})
+            val (bddF, leftF, countF) = helper(toBeConsumed, h - 1, length)
+            val (bddT, leftT, countT) = helper(leftF, h - 1, length - countF)
             (Node(bddT, bddF), leftT, countF + countT)
           })
           res
@@ -670,51 +656,22 @@ object CBDD {
         (False, remaining, 0)
       }
     }
-
-    val maxCount = count // (end - start).abs / stride_ + 1
-     // if (start >= 0) start else start + (1L << (height - 1)) + (1L << (height - 1))// Math.min(start, end)
-    var totalCount = 0L
     var result: CBDD = False
-    /*
-    do {
-
-      if (start_ < 0) {
-        val start__ = start_ + (1L << (height - 2)) + (1L << (height - 2)) // not in right subtree. TODO wrap around
-        val (res, left, c) = helper2(start__, height - 1, maxCount)
-        result = result || Node(res, False)
-        totalCount += c
-        start_ = left
-        if (c < maxCount) {
-          val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
-          totalCount += c2
-          result = result || Node(res, res2)
-        } else {
-          result = result || Node(res, False)
-        }
-
-      } else {
-        val (res, left, c) = helper2(start_, height, maxCount - totalCount)
-        result = result || res
-        totalCount += c
-        start_ = left
-      }
-    } while (totalCount < count) */
-
     if (start_ < 0) {
-      val start__ = start_ + (1L << (height - 2)) + (1L << (height - 2)) // not in right subtree. TODO wrap around
-      val (res, left, c) = helper2(start__, height - 1, maxCount)
+      val start__ = start_ + (1L << (height - 1)) //+ (1L << (height - 2)) // not in right subtree. TODO wrap around
+      val (res, left, c) = helper(start__, height - 1, count)
       result = result || Node(res, False)
-      totalCount += c
+
       start_ = left
-      if (c < maxCount) {
-        val (res2, left2, c2) = helper2(left, height - 1, maxCount - c)
-        totalCount += c2
+      if (c < count) {
+        val (res2, left2, c2) = helper(left, height - 1, count - c)
+
         result || Node(res, res2)
       } else {
         result || Node(res, False)
       }
     } else {
-      val (res, left, c) = helper2(start_, height, maxCount - totalCount)
+      val (res, left, c) = helper(start_, height, count)
       res
     }
 }

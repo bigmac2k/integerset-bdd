@@ -41,7 +41,6 @@ class DoubleLinkedLFUCache[Item, Id](maxSize: Int) {
         }
 
     def removeLast(): Option[Item] = {
-        println("removeLast")
         if (entries.isEmpty) return None
 
         val last = frequencyList.next.removeLast()
