@@ -1,7 +1,5 @@
 package cc.sven.bdd
 
-import cc.sven.{DoubleLinkedLFUCache, HashCodeIdentifier, Identifier}
-
 import scala.collection.mutable.WeakHashMap
 import scala.ref._
 import cc.sven.misc.unsignedLongToBigInt
@@ -624,7 +622,7 @@ object CBDD {
 
   def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : CBDD = {
 
-    lazy val strideCache = new DoubleLinkedLFUCache[(CBDD, Long, Long), (Long, Long, Long)](50000) //new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
+    lazy val strideCache = new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
     var start_ = start
     if (stride < 0L) {
       start_ = start + (count - 1) * stride

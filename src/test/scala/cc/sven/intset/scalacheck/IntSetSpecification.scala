@@ -3,6 +3,8 @@ package cc.sven.intset.scalacheck
 import org.scalacheck.Properties
 import org.scalacheck.Prop.forAll
 import org.scalacheck.Test.Parameters
+import org.scalacheck.Prop.BooleanOperators
+
 import scala.sys.BooleanProp
 import scala.collection.immutable.HashMap
 import org.scalacheck.Arbitrary
@@ -14,6 +16,7 @@ import cc.sven.bounded._
 import cc.sven.integral._
 import cc.sven.tlike._
 import cc.sven.constraint._
+import cc.sven.interval.{EmptyStridedIval, FilledStridedIval}
 import cc.sven.misc._
 import cc.sven.testmisc._
 
@@ -299,6 +302,130 @@ object IntSetSpecification extends Properties("IntSet") {
 			 //if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
 			 res
 	 }
+
+	property("mulSingleton IntLike") = forAll{
+		(a : Set[Int], b : Int, k : Int, offset : Int, offset2 : Int, bits: Int) =>
+			val longBits = implicitly[BoundedBits[Long]].bits
+			val bits_ = 32 min ((NBitLong.boundBits(bits) / 2) max 1)
+
+			val aBounded = a.map(x => NBitLong.bound(x.toLong, bits_))
+
+			val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded) ((acc, x) => acc + NBitLong(bits_, x))
+			val b_ = NBitLong.bound(if (b==0) 5 else b, bits_)
+			var start = System.nanoTime()
+			val ref = cartesianProduct(aBounded, Set(b_)).map((x) => x._1 * x._2)
+			val us = a_.mulSingleton(NBitLong(bits_, b_))
+
+			val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+			val ref_ = (IntLikeSet[Long, NBitLong](2*bits_) /: ref) ((acc, x) => acc + NBitLong(2*bits_, x))
+			val res = ref_ subsetOf us
+			if(!res) println("Fail inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref + ", result: " + res)
+			res
+
+	}
+
+	property("mulGeneralDepth IntLike") = forAll{
+		(a : Set[Long], b : Set[Long], bits : Int, depths : Int, findBounds: Boolean) =>
+			val longBits = implicitly[BoundedBits[Long]].bits
+			val bits_ = (NBitLong.boundBits(bits) / 2) max 1
+			val depths_ = NBitLong.boundBits(depths).abs % bits_
+			val aBounded = a.map(NBitLong.bound(_, bits_))
+			val bBounded = b.map(NBitLong.bound(_, bits_))
+			val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded)((acc, x) => acc + NBitLong(bits_, x))
+			val b_ = (IntLikeSet[Long, NBitLong](bits_) /: bBounded)((acc, x) => acc + NBitLong(bits_, x))
+			val ref = cartesianProduct(aBounded, bBounded).map((x) => x._1 * x._2)
+			//println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + depths_)
+			val us = a_.mulPredicate(DepthPredicate(depths_))(findBounds)(b_)
+			val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+			val ref_ = ref.map((x : Long) => castIT((bits_ * 2, x)))
+			val res = ref_.forall(us.contains)
+			if(!res) println("Wrong: inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+			res
+	}
+
+	property("mulGeneralPrecision IntLike") = forAll{
+		(a : Set[Long], b : Set[Long], bits : Int, precision : Int, findBounds: Boolean) =>
+			val longBits = implicitly[BoundedBits[Long]].bits
+			val bits_ = (NBitLong.boundBits(bits) / 2) max 1
+			val p = (precision % 100).abs
+			val precision_ = (if (p == 0) 50 else p).abs.toDouble / 100
+			val aBounded = a.map(NBitLong.bound(_, bits_))
+			val bBounded = b.map(NBitLong.bound(_, bits_))
+			val a_ = (IntLikeSet[Long, NBitLong](bits_) /: aBounded)((acc, x) => acc + NBitLong(bits_, x))
+			val b_ = (IntLikeSet[Long, NBitLong](bits_) /: bBounded)((acc, x) => acc + NBitLong(bits_, x))
+			val ref = cartesianProduct(aBounded, bBounded).map((x) => x._1 * x._2)
+			//println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", depths: " + precision_)
+			val us = a_.mulPredicate(PrecisionPredicate(precision_))(findBounds)(b_)
+			val castIT = implicitly[Castable[(Int, Long), NBitLong]]
+			val ref_ = ref.map((x : Long) => castIT((bits_ * 2, x)))
+			val res = ref_.forall(us.contains)
+			if(!res) println("inputa_: " + a_ + "inputb_: " + b_ + ", bits: " + bits_ + ", us: " + us + ", ref: " + ref_ + ", result: " + res)
+			res
+	}
+
+	property("stridedConstruction IntLike") = forAll {
+		(stride: Int, start: Int, end: Int) =>
+			val stride_ = math.max(2L,stride.abs)
+			val start_ = math.min(start.abs,end.abs) // (Long.MaxValue - 1 min start.toLong)
+		val end_ = start.abs max end.abs
+			val count_ = ((end_ - start_) / stride_) % 100000
+			(count_ > 0) ==> {
+				val bits = 64
+
+				val expected = for (i <- 0L to (count_ - 1)) yield start_ + i * stride_
+				val expected_ = expected.map(x => NBitLong(bits, x)).toSet
+				var start = System.nanoTime()
+				val resBdd = CBDD.constructStridedInterval(start_, count_, stride_, bits)
+
+				val us = new IntLikeSet[Long, NBitLong](bits, new IntSet[Long](resBdd))
+
+				val res = expected_.forall(us.contains) && us.forall(expected_.contains)
+				if (!res) println("Wrong: start: " + start_ + ", end: " + end_ + ", count: " + count_ + ", stride: " + stride_)
+				res
+			}
+	}
+
+	property("toStridedIntervalStrided IntLike") = forAll {
+		(start: Int, count: Int, stride: Int) =>
+			val stride_ = 2L max stride.abs % 10000
+			val start_ = start.abs max 0 // (Long.MaxValue - 1 min start.toLong)
+
+			val count_ = 2L max count.abs % 100000 min ((1L << 32) - start_) / stride_
+
+			(count_ > 0) ==> {
+				val end__ = start_ + (count_ - 1) * stride_
+
+				val resBdd = CBDD.constructStridedInterval(start_, count_, stride_, 64)
+
+				val x = new IntLikeSet[Long, Long](64, new IntSet[Long](resBdd)).toStridedInterval
+
+				val res = x match {
+					case EmptyStridedIval => count == 0
+					case FilledStridedIval(stride2, start2, end2) => start2 == start_ && stride2 == stride_ && end2 == end__
+				}
+				if (!res) println("Wrong: start: " + start_ + ", stride: " + stride_ + ", end: " + end__ + ", interval:" + x)
+				res
+			}
+	}
+
+	property("toStridedIntervalGeneral IntLike") = forAll {
+		(set: Set[Int], bits: Int) =>
+			val longBits = implicitly[BoundedBits[Long]].bits
+			val bits_ = 32 // (NBitLong.boundBits(bits) / 2) max 1
+		val aBounded = set.map(NBitLong.bound(_, bits_).toInt)
+			val a_ = (IntLikeSet[Int, Int](bits_) /: aBounded)((acc, x) => acc + (x.abs & ((1<<31) -1)))
+
+			val x = a_.toStridedInterval
+
+			val res = x match {
+				case EmptyStridedIval => a_.isEmpty
+				case FilledStridedIval(stride, start, end) => a_.forall(v => (v - start) % stride == 0 && v >= start && v <= end)
+			}
+
+			if (!res) println(s"Wrong: input: $a_, interval: $x")
+			res
+	}
+
 	 property("range IntLike") = forAll{
 		 (lo : Long, hi : Long, bits : Int) =>
 			 import scala.math.BigInt._
