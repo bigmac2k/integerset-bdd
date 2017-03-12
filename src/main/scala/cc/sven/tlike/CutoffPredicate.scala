@@ -2,17 +2,12 @@ package cc.sven.tlike
 
 import cc.sven.bdd.CBDD
 
-trait CutoffPredicate extends ((CBDD,Int,Int)=>Boolean)
-
-
-case class DepthPredicate(cutoff: Int) extends CutoffPredicate {
-
+case class DepthPredicate(cutoff: Int) extends ((CBDD,Int,Int)=>Boolean) {
   override def toString(): String = s"Depth: $cutoff"
   def apply(node: CBDD, height: Int, depth: Int): Boolean = depth > cutoff
 }
 
-case class PrecisionPredicate(precision: Double) extends  CutoffPredicate {
-
+case class PrecisionPredicate(precision: Double) extends ((CBDD,Int,Int)=>Boolean) {
   override def toString(): String = s"Precision: $precision"
 
   def apply(node: CBDD, height: Int, depth: Int): Boolean = {

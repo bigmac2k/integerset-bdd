@@ -205,7 +205,7 @@ object Main {
     Main.testStrideConversionFromStrided.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100))
 
     Main.testStridedInterval.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(100)) */
-    Main.testSingleton.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(1000))
+    Main.testGeneralDepth.check(Test.Parameters.defaultVerbose.withMinSuccessfulTests(1000))
   }
 
   def intervalSet(depth: Int): CBDD = {

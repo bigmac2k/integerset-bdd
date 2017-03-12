@@ -621,7 +621,6 @@ object CBDD {
   //lazy val strideCache = new DoubleLinkedLFUCache[(CBDD, Long, Long), (Long, Long, Long)](100000)
 
   def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : CBDD = {
-
     lazy val strideCache = new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
     var start_ = start
     if (stride < 0L) {
@@ -659,11 +658,9 @@ object CBDD {
       val start__ = start_ + (1L << (height - 1)) //+ (1L << (height - 2)) // not in right subtree. TODO wrap around
       val (res, left, c) = helper(start__, height - 1, count)
       result = result || Node(res, False)
-
       start_ = left
       if (c < count) {
         val (res2, left2, c2) = helper(left, height - 1, count - c)
-
         result || Node(res, res2)
       } else {
         result || Node(res, False)

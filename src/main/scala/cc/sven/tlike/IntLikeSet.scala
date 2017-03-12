@@ -326,6 +326,18 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 	 }
 	}
 
+	def times(that: IntLikeSet[I,T]) = {
+		def isSingleton(x: IntSet[I]): Boolean = x.remove(x.randomElement()).isEmpty
+
+		if (isSingleton(that.set)) {
+			this.mulSingleton(that.randomElement())
+		} else if (isSingleton(this.set)) {
+			that.mulSingleton(this.randomElement())
+		} else {
+			this.mulPredicate(PrecisionPredicate(0.9))(true)(that)
+		}
+	}
+
 
 	// TODO: thesis depth instead of height
 	def mulPredicate(cutoffTest: (CBDD,Int,Int)=>Boolean)(findBounds: Boolean)(that : IntLikeSet[I, T]) = {
@@ -375,48 +387,47 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 	}
 
 	def toIvalSetPredicate(cutoffTest: (CBDD,Int,Int)=>Boolean)(findBounds: Boolean): Set[Interval[I]] = {
-		def helper2(bdd: CBDD, height: Int, depth: Int, path: List[Boolean]): Set[Interval[I]] = bdd match {
+		def helper(bdd: CBDD, height: Int, depth: Int, path: List[Boolean]): Set[Interval[I]] = bdd match {
 			case False => Set()
-			case True =>
-				if (depth != 0) {
-					Set(FilledIval(IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(false)),
-						IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(true))))
-				} else {
-					Set(FilledIval(IntSet.fromBitVector(List(true) ++ List.fill(height - 1)(false)),
-						IntSet.fromBitVector(List(false) ++ List.fill(height - 1)(true))))
-				}
-
-			case n@Node(set, uset) => {
-				if (cutoffTest(n, height, depth)) {
-					if (findBounds) {
-						if (depth == 0 && set != False) {
-							val lo = (path.take(depth) ++ List(true) ++ set.falseMost.get).padTo(bits, false)
-							val hi = if (uset == False) {
-								(path.take(depth) ++ List(true) ++ set.trueMost.get).padTo(bits, true)
-							} else {
-								(path.take(depth) ++ List(false) ++ uset.trueMost.get).padTo(bits, true)
-							}
-							Set(FilledIval(IntSet.fromBitVector(lo), IntSet.fromBitVector(hi)))
+			case True if depth == 0 =>
+				val lo = IntSet.fromBitVector(List(true) ++ List.fill(height - 1)(false))
+				val hi = IntSet.fromBitVector(List(false) ++ List.fill(height - 1)(true))
+				Set(FilledIval(lo, hi))
+			case True if depth != 0 =>
+				val lo = IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(false))
+				val hi = IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(true))
+				Set(FilledIval(lo, hi))
+			case n@Node(set, uset) if cutoffTest(n, height, depth)=>
+				if (findBounds) {
+					if (depth == 0 && set != False) {
+						val lo = (path.take(depth) ++ List(true) ++ set.falseMost.get).padTo(bits, false)
+						val hi = if (uset == False) {
+							(path.take(depth) ++ List(true) ++ set.trueMost.get).padTo(bits, true)
 						} else {
-							val lo = (path.take(depth) ++ n.falseMost.get).padTo(bits, false)
-							val hi = (path.take(depth) ++ n.trueMost.get).padTo(bits, true)
-							Set(FilledIval(IntSet.fromBitVector(lo), IntSet.fromBitVector(hi)))
+							(path.take(depth) ++ List(false) ++ uset.trueMost.get).padTo(bits, true)
 						}
+						Set(FilledIval(IntSet.fromBitVector(lo), IntSet.fromBitVector(hi)))
 					} else {
-						if (depth == 0) {
-							Set(FilledIval(IntSet.fromBitVector(List(true) ++ List.fill(height - 1)(false)),
-								IntSet.fromBitVector(List(false) ++ List.fill(height - 1)(true))))
-						} else {
-							Set(FilledIval(IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(false)),
-								IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(true))))
-						}
+						val lo = (path.take(depth) ++ n.falseMost.get).padTo(bits, false)
+						val hi = (path.take(depth) ++ n.trueMost.get).padTo(bits, true)
+						Set(FilledIval(IntSet.fromBitVector(lo), IntSet.fromBitVector(hi)))
 					}
 				} else {
-					helper2(set, height - 1, depth + 1, path.updated(depth, true)) union helper2(uset, height - 1, depth + 1, path.updated(depth, false))
+					if (depth == 0) {
+						val lo = IntSet.fromBitVector(List(true) ++ List.fill(height - 1)(false))
+						val hi = IntSet.fromBitVector(List(false) ++ List.fill(height - 1)(true))
+						Set(FilledIval(lo,hi))
+					} else {
+						val lo = IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(false))
+						val hi = IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(true))
+						Set(FilledIval(lo, hi))
+					}
 				}
-			}
+			case Node(set, uset) =>
+				helper(set, height - 1, depth + 1, path.updated(depth, true)) union helper(uset, height - 1, depth + 1, path.updated(depth, false))
+
 		}
-		helper2(getBWCBDD, bits, 0, List.fill(bits)(false))
+		helper(getBWCBDD, bits, 0, List.fill(bits)(false))
 	}
 
 	def mulSingleton(op : T) : IntLikeSet[I, T] = {
@@ -462,7 +473,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 			val trueM = mulHelper(s, opI, op, incomingEdge = true, height + 1, smallestPossible.updated(height,true)) // mult with "1" successor
 			val combined = trueM || falseM
 				if (incomingEdge) {
-					val (norm, ov) = CBDD.plusSingleton(combined, shiftedOp, bits_)
+					val (norm, ov) = CBDD.plus(combined, shiftedOpBdd, bits_)
 					norm || ov
 				} else {
 					combined
