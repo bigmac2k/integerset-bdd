@@ -326,7 +326,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 	 }
 	}
 
-	def times(that: IntLikeSet[I,T]) = {
+	def times(that: IntLikeSet[I,T]) : IntLikeSet[I,T] = {
 		def isSingleton(x: IntSet[I]): Boolean = x.remove(x.randomElement()).isEmpty
 
 		if (isSingleton(that.set)) {
@@ -338,8 +338,6 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 		}
 	}
 
-
-	// TODO: thesis depth instead of height
 	def mulPredicate(cutoffTest: (CBDD,Int,Int)=>Boolean)(findBounds: Boolean)(that : IntLikeSet[I, T]) = {
 		import int.{ mkNumericOps, mkOrderingOps }
 		import cc.sven.interval.Interval._
@@ -445,12 +443,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 			case Node(set, uset) =>
 				CBDD(List.fill(bits_ - bits + 1)(true), False, False, set) || CBDD(List.fill(bits_ - bits + 1)(false), False, False, uset)
 		}
-
 		val bdd = mulHelper(bddSignExtend, IntSet.fromBitVector[Long](opSignExtend), opSignExtend, incomingEdge = false, 0, List.fill(opSignExtend.length)(false))
-		val res = new IntLikeSet[I, T](bits_, new IntSet[I](CBDD(List.fill(boundedBits.bits - bits_)(false), False, False, bdd)))
-
-		res
-
+		new IntLikeSet[I, T](bits_, new IntSet[I](CBDD(List.fill(boundedBits.bits - bits_)(false), False, False, bdd)))
 	}
 
 	def mulHelper(bdd: CBDD, opI : Long, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : List[Boolean]) : CBDD = {
