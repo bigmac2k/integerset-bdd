@@ -1,7 +1,5 @@
 package cc.sven.tlike
 
-import cc.sven.Evaluator
-
 import scala.collection.{SetLike, mutable}
 import cc.sven.bdd._
 import cc.sven.intset._
@@ -224,33 +222,16 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 	}
 
 	def mult(elems : Int, depths_ : Int)(that : IntLikeSet[I, T]): IntLikeSet[I,T] = {
-		println("Multiplication!")
-		println(elems, depths_)
-	  val res = Evaluator.evaluate(this, that, elems, depths_)
-
 		def isSingleton(x: IntSet[I]): Boolean = x.remove(x.randomElement()).isEmpty
 
 		val ref = mul(elems, depths_)(that)
 		if (isSingleton(that.set)) {
-			//val res = this.mulSingleton4(that.randomElement())
-			val correct = res.subsetOf(ref) && res.sizeBigInt == this.sizeBigInt
-			println(s"Correct: $correct")
-			if (!correct) {
-				println(res intersect !ref)
-			}
-			res
+			this.mulSingleton(that.randomElement())
 		} else if (isSingleton(this.set)) {
-			//val res = that.mulSingleton4(this.randomElement())
-			val correct = res.subsetOf(ref) && res.sizeBigInt == that.sizeBigInt
-			println(s"Correct: $correct")
-			if (!correct) {
-				println(res intersect !ref)
-			}
-			res
+			that.mulSingleton(this.randomElement())
 		} else {
 			this.mulPredicate(PrecisionPredicate(0.9))(true)(that)
 		}
-
 	}
 	/*
 	 * should have toivalset such that Set(-1) yields [-1 .. -1] even if depths is only 1
