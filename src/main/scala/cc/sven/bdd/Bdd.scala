@@ -225,42 +225,47 @@ object CBDD {
     }
     helper(integer)._2
   }
-  def plus(op1: CBDD, op2: CBDD, depth: Int): CBDDTuple = (op1, op2) match {
-    case (False, _) => (False, False)
-    case (x, False) => plus(False, x, depth)
-    case (True, True) => {
-      val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
-      (True, ov)
+  private val plusCache = WeakHashMap.empty[(CBDD, CBDD, Int), WeakReference[CBDDTuple]]
+  def plus(op1: CBDD, op2: CBDD, depth: Int): CBDDTuple = {
+    lazy val result = (op1, op2) match {
+      case (False, _) => (False, False)
+      case (x, False) => plus(False, x, depth)
+      case (True, True) => {
+        val ov = if (depth == 0) False else !CBDD(List.fill(depth)(true))
+        (True, ov)
+      }
+      case (n@Node(set, uset), True) => {
+        val lo = n.falseMost.get.padTo(depth, false)
+        val hi = n.trueMost.get.padTo(depth,true)
+        val noOv = CBDD(lo, List.fill(depth)(true))
+        val ov = if(lo.forall(!_)) False else CBDD(List.fill(depth)(false), pred(hi))
+        (noOv, ov)
+      }
+      /* less efficient version
+      *case (Node(set, uset), True) => {
+      *  val tt = plus(set, True, depth - 1)
+      *  val tf = tt
+      *  val ff = plus(uset, True, depth - 1)
+      *  val ft = ff
+      *  addMerge(ff, ft, tf, tt)
+      *}
+      */
+      case (True, x) => plus(x, True, depth)
+      case (Node(set1, uset1), Node(set2, uset2)) => {
+        /*optimization:
+        * op1 == op2 -> op1 << 1 XXX
+        * set1 == uset1 -> tt = ft, tf = ff
+        * set2 == uset2 -> tt = tf, ft = ff
+        */
+        val tt = plus(set1, set2, depth - 1)
+        val ft = if (set1 == uset1) tt else plus(uset1, set2, depth - 1)
+        val ff = if (set2 == uset2) ft else plus(uset1, uset2, depth - 1)
+        val tf = if (set1 == uset1) ff else if (set2 == uset2) tt else plus(set1, uset2, depth - 1)
+        addMerge(ff, ft, tf, tt)
+      }
     }
-    case (n@Node(set, uset), True) => {
-      val lo = n.falseMost.get.padTo(depth, false)
-      val hi = n.trueMost.get.padTo(depth,true)
-      val noOv = CBDD(lo, List.fill(depth)(true))
-      val ov = if(lo.forall(!_)) False else CBDD(List.fill(depth)(false), pred(hi))
-      (noOv, ov)
-    }
-    /* less efficient version
-     *case (Node(set, uset), True) => {
-     *  val tt = plus(set, True, depth - 1)
-     *  val tf = tt
-     *  val ff = plus(uset, True, depth - 1)
-     *  val ft = ff
-     *  addMerge(ff, ft, tf, tt)
-     *}
-     */
-    case (True, x) => plus(x, True, depth)
-    case (Node(set1, uset1), Node(set2, uset2)) => {
-      /*optimization:
-       * op1 == op2 -> op1 << 1 XXX
-       * set1 == uset1 -> tt = ft, tf = ff
-       * set2 == uset2 -> tt = tf, ft = ff
-       */
-      val tt = plus(set1, set2, depth - 1)
-      val ft = if (set1 == uset1) tt else plus(uset1, set2, depth - 1)
-      val ff = if (set2 == uset2) ft else plus(uset1, uset2, depth - 1)
-      val tf = if (set1 == uset1) ff else if (set2 == uset2) tt else plus(set1, uset2, depth - 1)
-      addMerge(ff, ft, tf, tt)
-    }
+    //sort bdds
+    plusCache.getOrElseUpdate((op1, op2, depth), WeakReference(result)).get.getOrElse(result)
   }
   def negate(bits : Int, bdd : CBDD) = {
     val (ov, norm) = plus(bNot(bdd), (CBDD(List.fill(bits - 1)(false) ++ List(true))), bits)
@@ -294,79 +299,95 @@ object CBDD {
       bitwiseOpHelper(op)(trueFalseTuples)
     }
   }
-  def bAnd(op1: CBDD, op2: CBDD): CBDD = (op1, op2) match {
-    case (False, _) => False
-    case (_, False) => bAnd(op2, op1)
-    case (True, x) => {
-        def trueRecurse(bdd: CBDD): CBDD = bdd match {
+  private val bAndCache = WeakHashMap.empty[(CBDD, CBDD), WeakReference[CBDD]]
+  def bAnd(op1: CBDD, op2: CBDD): CBDD = {
+    lazy val result = (op1, op2) match {
+      case (False, _) => False
+      case (_, False) => bAnd(op2, op1)
+      case (True, x) => {
+          def trueRecurse(bdd: CBDD): CBDD = bdd match {
+            case False => False
+            case True  => True
+            case Node(set, uset) => {
+              val nset = trueRecurse(set)
+              val nuset = trueRecurse(uset) || nset
+              Node(nset, nuset)
+            }
+          }
+        trueRecurse(x)
+      }
+      case (_, True) => bAnd(op2, op1)
+      case (Node(set1, uset1), Node(set2, uset2)) => {
+        val tt = bAnd(set1, set2)
+        val ft = if(set1 == uset1) tt else bAnd(uset1, set2)
+        val ff = if(set2 == uset2) ft else bAnd(uset1, uset2)
+        val tf = if(set1 == uset1) ff else if (set2 == uset2) tt else bAnd(set1, uset2)
+        val nuset = union3(tf, ft, ff)
+        Node(tt, nuset)
+      }
+    }
+    bAndCache.getOrElseUpdate((op1, op2), WeakReference(result)).get.getOrElse(result)
+  }
+  private val bOrCache = WeakHashMap.empty[(CBDD, CBDD), WeakReference[CBDD]]
+  def bOr(op1 : CBDD, op2 : CBDD) : CBDD = {
+    lazy val result = (op1, op2) match {
+      case (False, _) => False
+      case (_, False) => bOr(op2, op1)
+      case (True, x) => {
+        def trueRecurse(bdd : CBDD) : CBDD = bdd match {
           case False => False
-          case True  => True
+          case True => True
           case Node(set, uset) => {
-            val nset = trueRecurse(set)
-            val nuset = trueRecurse(uset) || nset
+            val nuset = trueRecurse(uset)
+            val nset = trueRecurse(set) || nuset
             Node(nset, nuset)
           }
         }
-      trueRecurse(x)
-    }
-    case (_, True) => bAnd(op2, op1)
-    case (Node(set1, uset1), Node(set2, uset2)) => {
-      val tt = bAnd(set1, set2)
-      val ft = if(set1 == uset1) tt else bAnd(uset1, set2)
-      val ff = if(set2 == uset2) ft else bAnd(uset1, uset2)
-      val tf = if(set1 == uset1) ff else if (set2 == uset2) tt else bAnd(set1, uset2)
-      val nuset = union3(tf, ft, ff)
-      Node(tt, nuset)
-    }  
-  }
-  def bOr(op1 : CBDD, op2 : CBDD) : CBDD = (op1, op2) match {
-    case (False, _) => False
-    case (_, False) => bOr(op2, op1)
-    case (True, x) => {
-      def trueRecurse(bdd : CBDD) : CBDD = bdd match {
-        case False => False
-        case True => True
-        case Node(set, uset) => {
-          val nuset = trueRecurse(uset)
-          val nset = trueRecurse(set) || nuset
-          Node(nset, nuset)
-        }
+        trueRecurse(x)
       }
-      trueRecurse(x)
+      case (_, True) => bOr(op2, op1)
+      case (Node(set1, uset1), Node(set2, uset2)) => {
+        val tt = bOr(set1, set2)
+        val ft = if(set1 == uset1) tt else bOr(uset1, set2)
+        val ff = if(set2 == uset2) ft else bOr(uset1, uset2)
+        val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else bOr(set1, uset2)
+        val nset = union3(tt, ft, tf)
+        Node(nset, ff)
+      }
     }
-    case (_, True) => bOr(op2, op1)
-    case (Node(set1, uset1), Node(set2, uset2)) => {
-      val tt = bOr(set1, set2)
-      val ft = if(set1 == uset1) tt else bOr(uset1, set2)
-      val ff = if(set2 == uset2) ft else bOr(uset1, uset2)
-      val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else bOr(set1, uset2)
-      val nset = union3(tt, ft, tf)
-      Node(nset, ff)
-    }
+    bOrCache.getOrElseUpdate((op1, op2), WeakReference(result)).get.getOrElse(result)
   }
-  def bXOr(op1 : CBDD, op2 : CBDD) : CBDD = (op1, op2) match {
-    case (False, _) => False
-    case (_, False) => bXOr(op2, op1)
-    case (True, _) => True
-    case (_, True) => bXOr(op2, op1)
-    case (Node(set1, uset1), Node(set2, uset2)) => {
-      val tt = bXOr(set1, set2)
-      val ft = if(set1 == uset1) tt else bXOr(uset1, set2)
-      val ff = if(set2 == uset2) ft else bXOr(uset1, uset2)
-      val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else bXOr(set1, uset2)
-      val nset = ft || tf
-      val nuset = tt || ff
-      Node(nset, nuset)
+  private val bXOrCache = WeakHashMap.empty[(CBDD, CBDD), WeakReference[CBDD]]
+  def bXOr(op1 : CBDD, op2 : CBDD) : CBDD = {
+    lazy val result = (op1, op2) match {
+      case (False, _) => False
+      case (_, False) => bXOr(op2, op1)
+      case (True, _) => True
+      case (_, True) => bXOr(op2, op1)
+      case (Node(set1, uset1), Node(set2, uset2)) => {
+        val tt = bXOr(set1, set2)
+        val ft = if(set1 == uset1) tt else bXOr(uset1, set2)
+        val ff = if(set2 == uset2) ft else bXOr(uset1, uset2)
+        val tf = if(set1 == uset1) ff else if(set2 == uset2) tt else bXOr(set1, uset2)
+        val nset = ft || tf
+        val nuset = tt || ff
+        Node(nset, nuset)
+      }
     }
+    bXOrCache.getOrElseUpdate((op1, op2), WeakReference(result)).get.getOrElse(result)
   }
-  def bNot(op1: CBDD): CBDD = op1 match {
-    case False           => False
-    case True            => True
-    case Node(set, uset) if set == uset => {
-      val not = bNot(set)
-      Node(not, not)
+  private val bNotCache = WeakHashMap.empty[CBDD, WeakReference[CBDD]]
+  def bNot(op1: CBDD): CBDD = {
+    lazy val result = op1 match {
+      case False           => False
+      case True            => True
+      case Node(set, uset) if set == uset => {
+        val not = bNot(set)
+        Node(not, not)
+      }
+      case Node(set, uset) => Node(bNot(uset), bNot(set))
     }
-    case Node(set, uset) => Node(bNot(uset), bNot(set))
+    bNotCache.getOrElseUpdate(op1, WeakReference(result)).get.getOrElse(result)
   }
 }
 
