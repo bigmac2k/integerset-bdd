@@ -494,6 +494,13 @@ object IntSetSpecification extends Properties("IntSet") {
       val ownpos = (Set[NBitLong]() /: bddpos)((acc, x) => acc + x)
       ownneg == neg && ownpos == pos
   }
+  property("stride strides") = forAll{
+    (bits_ : Int, stride_ : Int) =>
+      val bits = ((bits_ & Int.MaxValue) % 16).max(1)
+      val stride = (stride_ & Int.MaxValue).max(1)
+      val res = IntLikeSet.strided[Int, Int](bits, stride).toSeq
+      res.zip(res.tail).forall{ case (a, b) => a + stride == b }
+  }
 /* [- AW -]
    Wichtigere Funktionalitaeten:
    teilmenge [- SCM -] DONE

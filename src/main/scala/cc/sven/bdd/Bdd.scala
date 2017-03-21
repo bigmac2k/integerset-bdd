@@ -184,6 +184,28 @@ object CBDD {
     require(checker(path1, path2))
     apply(path1, True, False, True) && apply(path2, False, True, True)
   }
+  def strided(depth: Int, stride: Int): CBDD = {
+    import scala.collection.mutable
+    val map = mutable.Map.empty[(Int, Int), (CBDD, Int)]
+    def helper(d: Int, n: Int) : (CBDD, Int) =
+      map.get((d, n)) match {
+        case Some(x) => x
+        case None => {
+          if (d == depth && n == 0) (True, stride - 1)
+          else {
+            val value = BigInt(1) << (depth - d)
+            if (value <= n) (False, n - value.toInt) else {
+              val (uset, usetleft) = helper(d + 1, n)
+              val (set, setleft) = helper(d + 1, usetleft)
+              val res = (Node(set, uset), setleft)
+              map.put((d, n), res)
+              res
+            }
+          }
+        }
+      }
+    helper(0, 0)._1
+  }
   def union3(a: CBDD, b: CBDD, c: CBDD): CBDD = List(a, b, c).distinct.reduce(_ || _)
   type CBDDTuple = (CBDD, CBDD)
   def addMerge(ff: CBDDTuple, ft: CBDDTuple, tf: CBDDTuple, tt: CBDDTuple): CBDDTuple = {

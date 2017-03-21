@@ -474,6 +474,11 @@ object IntLikeSet {
     }
     range[java.lang.Long, T](lo, hi)(cc.sven.integral.Implicits.jLongIsIntegral, cc.sven.bounded.Bounded.jLongIsBounded, cc.sven.bounded.BoundedBits.jLongIsBoundedBits, dboundedBits, castTIT, castITT)
   }
+  def strided[I, T](bits: Int, stride: Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = {
+    val cbdd = CBDD(List.fill(implicitly[BoundedBits[I]].bits - bits)(false), False, False, CBDD.strided(bits, stride))
+    val set = new IntSet[I](cbdd)
+    new IntLikeSet[I, T](bits, set)
+  }
 }
 
 object Implicits {
