@@ -4,6 +4,9 @@ import scala.collection.mutable.WeakHashMap
 import scala.ref._
 import cc.sven.misc.unsignedLongToBigInt
 
+import scala.collection.immutable.::
+import scala.collection.mutable
+
 /** Trait of BDD objects.
   * BDD objects have a depth, specifying the total depth of the subtree,
   * a count of total paths to True terminals if all subtrees had same depth,
@@ -597,6 +600,57 @@ object CBDD {
     //sort bdds
     plusCache.getOrElseUpdate((op1, op2, depth), WeakReference(result)).get.getOrElse(result)
   }
+
+  def constructStridedInterval(start: Long, count: Long, stride : Long, height : Int) : CBDD = {
+    lazy val strideCache = new mutable.HashMap[(Long, Long, Long),(CBDD, Long, Long)]()
+    var start_ = start
+    if (stride < 0L) {
+      start_ = start + (count - 1) * stride
+    }
+    val stride_ = stride.abs
+
+    def helper(toBeConsumed: Long, h: Long, length: Long): (CBDD, Long, Long) = {
+      if (length <= 0) return (False, toBeConsumed, 0)
+      if (h == 0 && toBeConsumed == 0) return (True, stride_ - 1, 1)
+
+      val remaining = if (h < 64) toBeConsumed - (1L << h) else -1 // overflow, if h>62 we can consume any 0<=x<=long.MaxValue
+
+      if (remaining < 0L) {
+        if (h == 64 || h == 63 || Math.ceil(((1L << h) - toBeConsumed) / stride_.toDouble) > length) { // TODO
+          // don' memoize
+          val (bddF, leftF, countF) = helper(toBeConsumed, h - 1, length)
+          val (bddT, leftT, countT) = helper(leftF, h - 1, length - countF)
+          (Node(bddT, bddF), leftT, countF + countT)
+
+        } else {
+          val res = strideCache.getOrElseUpdate((toBeConsumed, h, stride_), {
+            val (bddF, leftF, countF) = helper(toBeConsumed, h - 1, length)
+            val (bddT, leftT, countT) = helper(leftF, h - 1, length - countF)
+            (Node(bddT, bddF), leftT, countF + countT)
+          })
+          res
+        }
+      } else {
+        (False, remaining, 0)
+      }
+    }
+    var result: CBDD = False
+    if (start_ < 0) {
+      val start__ = start_ + (1L << (height - 1)) //+ (1L << (height - 2)) // not in right subtree. TODO wrap around
+      val (res, left, c) = helper(start__, height - 1, count)
+      result = result || Node(res, False)
+      start_ = left
+      if (c < count) {
+        val (res2, left2, c2) = helper(left, height - 1, count - c)
+        result || Node(res, res2)
+      } else {
+        result || Node(res, False)
+      }
+    } else {
+      val (res, left, c) = helper(start_, height, count)
+      res
+    }
+}
 
   /** Method implementing negation.
     *

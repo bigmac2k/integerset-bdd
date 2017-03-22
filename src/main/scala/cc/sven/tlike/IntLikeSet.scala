@@ -1,11 +1,12 @@
 package cc.sven.tlike
 
-import scala.collection.SetLike
+import scala.collection.{SetLike, mutable}
 import cc.sven.bdd._
 import cc.sven.intset._
 import cc.sven.bounded._
 import cc.sven.interval._
 import cc.sven.misc.unsignedLongToBigInt
+
 import scala.collection.JavaConverters._
 
 class BitWidthException(widthA : Int, widthB : Int) extends Exception {
@@ -89,7 +90,7 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
   //def sizeBigInt = set.cbdd.truePaths.map((x) => BigInt(1l << (boundedBits.bits - x.length))).sum
   def sizeBigInt: BigInt = {
     import scala.math.BigInt._
-    assert(set.cbdd.depth <= boundedBits.bits)
+		assert(set.cbdd.depth <= boundedBits.bits, s"${set.cbdd.depth} > ${boundedBits.bits}")
     if(set.cbdd.depth > 64) //we use long
     //could be optimized by only going through cbdd.depth - 64 upper part.
       set.cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
@@ -219,6 +220,19 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     case Node(set, uset) => (fromBWCBDD(Node(set, False)), fromBWCBDD(Node(False, uset)))
     case x => (fromBWCBDD(Node(x, False)), fromBWCBDD(Node(False, x)))
   }
+
+	def mult(elems : Int, depths_ : Int)(that : IntLikeSet[I, T]): IntLikeSet[I,T] = {
+		def isSingleton(x: IntSet[I]): Boolean = x.remove(x.randomElement()).isEmpty
+
+		val ref = mul(elems, depths_)(that)
+		if (isSingleton(that.set)) {
+			this.mulSingleton(that.randomElement())
+		} else if (isSingleton(this.set)) {
+			that.mulSingleton(this.randomElement())
+		} else {
+			this.mulPredicate(PrecisionPredicate(0.9))(true)(that)
+		}
+	}
   /*
    * should have toivalset such that Set(-1) yields [-1 .. -1] even if depths is only 1
    *  -> go down bdd until first node with both sub-bdds non false
@@ -292,15 +306,201 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
      case (acc, FilledIval(lo, hi)) => acc union IntLikeSet.range[I, T](bits_ min boundedBits.bits, lo, hi).changeBitWidth(bits_)
    }
   }
+
+	def times(that: IntLikeSet[I,T]) : IntLikeSet[I,T] = {
+		def isSingleton(x: IntSet[I]): Boolean = x.remove(x.randomElement()).isEmpty
+
+		if (isSingleton(that.set)) {
+			this.mulSingleton(that.randomElement())
+		} else if (isSingleton(this.set)) {
+			that.mulSingleton(this.randomElement())
+		} else {
+			this.mulPredicate(PrecisionPredicate(0.9))(true)(that)
+		}
+	}
+
+	def mulPredicate(cutoffTest: (CBDD,Int,Int)=>Boolean)(findBounds: Boolean)(that : IntLikeSet[I, T]) = {
+		import int.{ mkNumericOps, mkOrderingOps }
+		import cc.sven.interval.Interval._
+		val ivalInt = implicitly[Arith[Interval[I]]]
+		val ivalSet1 = toIvalSetPredicate(cutoffTest)(findBounds)
+		val ivalSet2 = that.toIvalSetPredicate(cutoffTest)(findBounds)
+
+		val bits_ = bits * 2
+		//assert(bits_ <= implicitly[BoundedBits[I]].bits)
+		val ivalRes = for{
+			a <- ivalSet1
+			b <- ivalSet2
+		} yield {
+			//(a * b)
+			(a, b) match {
+				case (EmptyIval, _) => EmptyIval
+				case (_, EmptyIval) => EmptyIval
+				case (FilledIval(lo1, hi1), FilledIval(lo2, hi2)) => {
+					//force BigInt operation because fuck it - I want results!
+					//this will have a special place int he hall of shame
+					//XXX SCM : Change this horrible thing!
+					val a = BigInt(lo1.toLong) * BigInt(lo2.toLong)
+					val b = BigInt(lo1.toLong) * BigInt(hi2.toLong)
+					val c = BigInt(hi1.toLong) * BigInt(lo2.toLong)
+					val d = BigInt(hi1.toLong) * BigInt(hi2.toLong)
+					val lo = a min b min c min d
+					val hi = a max b max c max d
+					val a_ = lo1 * lo2
+					val b_ = lo1 * hi2
+					val c_ = hi1 * lo2
+					val d_ = hi1 * hi2
+					val lo_ = a_ min b_ min c_ min d_
+					val hi_ = a_ max b_ max c_ max d_
+					val lo__ = if(BigInt(lo_.toLong) != lo) bounded.minBound else lo_
+					val hi__ = if(BigInt(hi_.toLong) != hi) bounded.maxBound else hi_
+					FilledIval(lo__, hi__)
+				}
+			}
+		}
+
+		(IntLikeSet[I, T](bits_) /: ivalRes){
+			case (acc, EmptyIval) => acc
+			case (acc, FilledIval(lo, hi)) => acc union IntLikeSet.range[I, T](bits_ min boundedBits.bits, lo, hi).changeBitWidth(bits_)
+		}
+	}
+
+	def toIvalSetPredicate(cutoffTest: (CBDD,Int,Int)=>Boolean)(findBounds: Boolean): Set[Interval[I]] = {
+		def helper(bdd: CBDD, height: Int, depth: Int, path: List[Boolean]): Set[Interval[I]] = bdd match {
+			case False => Set()
+			case True if depth == 0 =>
+				val lo = IntSet.fromBitVector(List(true) ++ List.fill(height - 1)(false))
+				val hi = IntSet.fromBitVector(List(false) ++ List.fill(height - 1)(true))
+				Set(FilledIval(lo, hi))
+			case True if depth != 0 =>
+				val lo = IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(false))
+				val hi = IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(true))
+				Set(FilledIval(lo, hi))
+			case n@Node(set, uset) if cutoffTest(n, height, depth)=>
+				if (findBounds) {
+					if (depth == 0 && set != False) {
+						val lo = (path.take(depth) ++ List(true) ++ set.falseMost.get).padTo(bits, false)
+						val hi = if (uset == False) {
+							(path.take(depth) ++ List(true) ++ set.trueMost.get).padTo(bits, true)
+						} else {
+							(path.take(depth) ++ List(false) ++ uset.trueMost.get).padTo(bits, true)
+						}
+						Set(FilledIval(IntSet.fromBitVector(lo), IntSet.fromBitVector(hi)))
+					} else {
+						val lo = (path.take(depth) ++ n.falseMost.get).padTo(bits, false)
+						val hi = (path.take(depth) ++ n.trueMost.get).padTo(bits, true)
+						Set(FilledIval(IntSet.fromBitVector(lo), IntSet.fromBitVector(hi)))
+					}
+				} else {
+					if (depth == 0) {
+						val lo = IntSet.fromBitVector(List(true) ++ List.fill(height - 1)(false))
+						val hi = IntSet.fromBitVector(List(false) ++ List.fill(height - 1)(true))
+						Set(FilledIval(lo,hi))
+					} else {
+						val lo = IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(false))
+						val hi = IntSet.fromBitVector(path.take(depth) ++ List.fill(height)(true))
+						Set(FilledIval(lo, hi))
+					}
+				}
+			case Node(set, uset) =>
+				helper(set, height - 1, depth + 1, path.updated(depth, true)) union helper(uset, height - 1, depth + 1, path.updated(depth, false))
+
+		}
+		helper(getBWCBDD, bits, 0, List.fill(bits)(false))
+	}
+
   def mulSingleton(op : T) : IntLikeSet[I, T] = {
     val (opBits, opI) = castTI(op)
-    assert(opBits == bits)
-    val opBools = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
-    //only positive for now...
-    require(!opBools.head)
+		val bits_ = boundedBits.bits min 2*bits
+		if (opI == int.zero) return IntLikeSet.range(bits_, int.zero, int.zero)
     
-    ???
+
+		val x = IntSet.toBitVector(opI).drop(boundedBits.bits - bits)
+		val opSignExtend = x.reverse.padTo(bits_, x.head).reverse
+
+		val bddSignExtend = getBWCBDD match {
+			case True => CBDD(List.fill(bits_ - bits + 1)(true), False, False, True) || CBDD(List.fill(bits_ - bits + 1)(false), False, False, True)
+			case False => False
+			case Node(set, uset) =>
+				CBDD(List.fill(bits_ - bits + 1)(true), False, False, set) || CBDD(List.fill(bits_ - bits + 1)(false), False, False, uset)
+		}
+		val bdd = mulHelper(bddSignExtend, IntSet.fromBitVector[Long](opSignExtend), opSignExtend, incomingEdge = false, 0, List.fill(opSignExtend.length)(false))
+		new IntLikeSet[I, T](bits_, new IntSet[I](CBDD(List.fill(boundedBits.bits - bits_)(false), False, False, bdd)))
   }
+
+	def mulHelper(bdd: CBDD, opI : Long, op : List[Boolean], incomingEdge : Boolean, height : Int, smallestPossible : List[Boolean]) : CBDD = {
+		val bits_ = boundedBits.bits min 2*bits
+		val k = bits_ - height
+
+		lazy val shiftedOp = op.drop(k) ++ List.fill(k)(false)
+		lazy val shiftedOpBdd = CBDD(shiftedOp)
+		bdd match {
+			case False => False
+			case True =>
+				val result = if (incomingEdge) {
+					CBDD.constructStridedInterval(int.toLong(IntSet.fromBitVector(shiftedOp)), 1L << k, opI, bits_)
+				} else {
+					CBDD.constructStridedInterval(0, 1L << k, opI, bits_)
+				}
+				result
+			case Node(s, uset) =>
+				val falseM = mulHelper(uset, opI, op, incomingEdge = false, height + 1, smallestPossible) // mult with "0" successor
+			val trueM = mulHelper(s, opI, op, incomingEdge = true, height + 1, smallestPossible.updated(height,true)) // mult with "1" successor
+			val combined = trueM || falseM
+				if (incomingEdge) {
+					val (norm, ov) = CBDD.plus(combined, shiftedOpBdd, bits_)
+					norm || ov
+				} else {
+					combined
+				}
+		}
+	}
+
+
+	def memoize[I, O](f: I => O): I => O = new mutable.HashMap[I, O]() {
+		override def apply(key: I) = {
+			getOrElseUpdate(key, f(key))
+		}
+	}
+
+	def toStridedInterval: StridedInterval[T] = {
+		def gcd(a: Long, b: Long): Long = if (b == 0) {
+			a
+		} else {
+			gcd(b, a % b)
+		}
+		lazy val helperMemo: ((CBDD, Int)) => (Long, Long, Long, Boolean) = memoize[(CBDD, Int),(Long, Long, Long, Boolean)] {
+			case (True, 0)  => (0L, 0L, 0L, true)
+			case (True, h)  => (0L, 1L, 0L, true)
+			case (False, h) => (1L << h, 0L, 0L, false)
+			case (Node(set, uset), h) => {
+				val (fLeft, fStride, fRight, fContainsTrue) = helperMemo(uset, h - 1)
+				if (fStride == 1) {
+					(fLeft, fStride, fRight, fContainsTrue)
+				} else {
+					val (tLeft, tStride, tRight, tContainsTrue) = helperMemo(set, h - 1)
+
+					if (!tContainsTrue) {
+						(tLeft + tRight + fLeft, fStride, fRight, fContainsTrue)
+					} else if (!fContainsTrue) {
+						(tLeft, tStride, tRight + fLeft + fRight, tContainsTrue)
+					} else {
+						(tLeft, gcd(gcd(fStride, tStride), tRight + fLeft + 1), fRight, tContainsTrue || fContainsTrue)
+					}
+				}
+			}
+		}
+
+		if (getBWCBDD == False) {
+			EmptyStridedIval
+		} else {
+			val (left, stride, right, _) = helperMemo((getBWCBDD, bits))
+
+			val res = FilledStridedIval(castIT(bits, int.fromInt(if (stride <= 1) 1 else stride.toInt)), min, max)
+			res
+		}
+	}
+
   def checkIntegrity() {
     def helper(cbdd : CBDD, depth : Int) : Boolean = cbdd match {
       case _ if depth == 0 => true
@@ -317,8 +517,6 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     val toDrop = bits - from - 1
     val toTake = from - to + 1
     val toFill = bits - toTake
-    if(isFull) return new IntLikeSet[I, T](toTake, fromBWCBDD(CBDD(List.fill(toFill)(false), False, False, True)).set)
-    if(isEmpty) return new IntLikeSet[I, T](toTake, fromBWCBDD(False).set)
     def takeFkt(cbdd : CBDD) : CBDD = cbdd.take(toTake)
     def reduceFkt(a : CBDD, b : CBDD) = a || b
     val iSet = fromBWCBDD(CBDD(List.fill(toFill)(false), False, False, getBWCBDD.drop(toDrop, False, takeFkt, reduceFkt)))
