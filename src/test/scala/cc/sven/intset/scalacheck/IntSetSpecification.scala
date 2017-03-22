@@ -3,16 +3,17 @@ package cc.sven.intset.scalacheck
 import org.scalacheck.Properties
 import org.scalacheck.Prop.forAll
 import org.scalacheck.Test.Parameters
-import cc.sven.intset._
-import cc.sven.bounded._
-import cc.sven.integral._
-import cc.sven.intset.IntSet
 import scala.sys.BooleanProp
-import cc.sven.tlike._
-import cc.sven.constraint._
 import scala.collection.immutable.HashMap
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
+import cc.sven.intset.IntSet
+import cc.sven.intset._
+import cc.sven.bdd._
+import cc.sven.bounded._
+import cc.sven.integral._
+import cc.sven.tlike._
+import cc.sven.constraint._
 import cc.sven.misc._
 import cc.sven.testmisc._
 
@@ -20,6 +21,7 @@ object IntSetSpecification extends Properties("IntSet") {
   override def main(args : Array[String]): Unit = {
     this.check(Parameters.default.withMinSuccessfulTests(1000))
   }
+
   property("bitVector identity[Int]") = forAll((a: Int) => IntSet.fromBitVector[Int](IntSet.toBitVector(a)) == a)
   property("set eq IntSet[Int]") = forAll{
     (a : Set[Int]) =>
@@ -494,12 +496,23 @@ object IntSetSpecification extends Properties("IntSet") {
       val ownpos = (Set[NBitLong]() /: bddpos)((acc, x) => acc + x)
       ownneg == neg && ownpos == pos
   }
+<<<<<<< HEAD
   property("stride strides") = forAll{
     (bits_ : Int, stride_ : Int) =>
       val bits = ((bits_ & Int.MaxValue) % 16).max(1)
       val stride = (stride_ & Int.MaxValue).max(1)
       val res = IntLikeSet.strided[Int, Int](bits, stride).toSeq
       res.zip(res.tail).forall{ case (a, b) => a + stride == b }
+=======
+	property("(widen_naive result IntSet geq union arguments IntSets)") = forAll {
+		(as: Set[Int], bs: Set[Int], prec: Int) =>
+			val a = IntSet(as)
+			val b = IntSet(bs)
+			val c = a.widenNaive(b, prec)
+			val d = b.widenNaive(a, prec)
+
+			a.forall(c.contains(_)) && b.forall(c.contains(_)) && a.forall(d.contains(_)) && b.forall(d.contains(_)) // geq?
+>>>>>>> bd00dbb44ec79818e08441827f2592f26a19ba4e
   }
 /* [- AW -]
    Wichtigere Funktionalitaeten:

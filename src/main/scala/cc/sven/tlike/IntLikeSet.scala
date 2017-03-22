@@ -94,7 +94,8 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
     //could be optimized by only going through cbdd.depth - 64 upper part.
       set.cbdd.truePaths.map((x) => 2 pow (boundedBits.bits - x.length)).sum
     else
-      ((1: BigInt) << (boundedBits.bits - set.cbdd.depth)) * unsignedLongToBigInt(set.cbdd.count)
+			CBDD.sizeBigInt(set.cbdd, boundedBits.bits)
+			// ((1: BigInt) << (boundedBits.bits - set.cbdd.depth)) * unsignedLongToBigInt(set.cbdd.count)
   }
   override def size : Int = {
     val bint = sizeBigInt
@@ -401,6 +402,16 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
       restrictLessOrEqual(lowerSet)
     }
   }
+
+	def widenNaive(that: IntLikeSet[I, T], precision: Int) = {
+		checkBitWidth(this, that)
+		new IntLikeSet[I, T](bits, set.widenNaive(that.set, precision))
+	}
+
+	def widenPrecisionTree(that: IntLikeSet[I, T], precision: CBDD) = {
+		checkBitWidth(this, that)
+		new IntLikeSet[I, T](bits, set.widenPrecisionTree(that.set, precision))
+	}
 }
 object IntLikeSet {
   def apply[I, T](bits : Int)(implicit int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], dboundedBits : DynBoundedBits[T], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : IntLikeSet[I, T] = new IntLikeSet(bits, IntSet[I]()(int, bounded, boundedBits))
