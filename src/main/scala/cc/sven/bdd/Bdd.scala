@@ -47,8 +47,23 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
 
   def nodecount = bdd.nodecount
 
-  private[this] def ite_raw(triple: (CBDD, CBDD, CBDD), f: ((CBDD, CBDD, CBDD)) => CBDD): CBDD =
-    triple match {
+  private val iteCache = WeakHashMap.empty[(CBDD, CBDD, CBDD), WeakReference[CBDD]]
+  /** If-then-else function for operation on CBDDs. Used to implement any two-variable logic function.
+    * Given two CBDDs, representing logical expressions, evaluates the expression represented by the calling object,
+    * for each Node deciding which branch is taken (then or else), constructing the appropriate CBDD object and
+    * returning it.
+    *
+    * Functionally used for implementation of binary operations (such as AND, OR, IMPLIES), where for each pair
+    * of Nodes a function is applied. Either a Terminal is found or a recursive call on the remainder is made.
+    * The result of each application is then stored in the CBDD which is returned.
+    *
+    * @param t CBDD of then
+    * @param e CBDD of else
+    * @return CBDD of computed result
+    */
+  def ite(t: CBDD, e: CBDD): CBDD = {
+    val triple = (this, t, e)
+    lazy val result = triple  match {
       case (_, t, e) if t == e     => t
       case (True, t, _)            => t
       case (False, _, e)           => e
@@ -70,28 +85,12 @@ class CBDD(val bdd: BDD, val compl: Boolean) {
           }
         val (tset, tuset) = extract(t)
         val (eset, euset) = extract(e)
-        Node(f((iset, tset, eset)), f((iuset, tuset, euset)))
+        Node(iset.ite(tset, eset), iuset.ite(tuset, euset))
       }
     }
-
-  private[this] var recIte: ((CBDD, CBDD, CBDD)) => CBDD = null
-  private[this] val memIte: ((CBDD, CBDD, CBDD)) => CBDD = ite_raw(_, recIte)
-  recIte = memIte
-
-  /** If-then-else function for operation on CBDDs. Used to implement any two-variable logic function.
-    * Given two CBDDs, representing logical expressions, evaluates the expression represented by the calling object,
-    * for each Node deciding which branch is taken (then or else), constructing the appropriate CBDD object and
-    * returning it.
-    *
-    * Functionally used for implementation of binary operations (such as AND, OR, IMPLIES), where for each pair
-    * of Nodes a function is applied. Either a Terminal is found or a recursive call on the remainder is made.
-    * The result of each application is then stored in the CBDD which is returned.
-    *
-    * @param t CBDD of then
-    * @param e CBDD of else
-    * @return CBDD of computed result
-    */
-  def ite(t: CBDD, e: CBDD): CBDD = memIte((this, t, e))
+    //result
+    iteCache.getOrElseUpdate(triple, WeakReference(result)).get.getOrElse(result)
+  }
 
   /** Logical And for CBDDs. */
   def &&(that: CBDD) = ite(that, False)
