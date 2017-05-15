@@ -104,6 +104,11 @@ sealed trait Constraint {
     val res = solve[T,({type x[a]=IntLikeSet[java.lang.Long, a]})#x](HashMap(table.asScala.toStream.map(x => (x._1 : Int, x._2)) : _*))
     new java.util.HashMap(res.map(x => (x._1 : Integer, x._2)).asJava)
   }
+  def solveIntLike[I, T](table : HashMap[Int, IntLikeSet[I, T]])(implicit dBounded : DynBounded[T], dBoundedBits : DynBoundedBits[T], ord : Ordering[T], int : Integral[I], bounded : Bounded[I], boundedBits : BoundedBits[I], castTI : Castable[T, (Int, I)], castIT : Castable[(Int, I), T]) : HashMap[Int, IntLikeSet[I, T]] = {
+    type TLikeAnon[X] = IntLikeSet[I, X]
+    implicit val constrainable : Constrainable[T, TLikeAnon] = Constraint.intLikeSetIsConstrainable[I, T]
+    solve[T, TLikeAnon](table)
+  }
   def solve[T, S[_]](table : HashMap[Int, S[T]])(implicit dBounded : DynBounded[T], ord : Ordering[T], const : Constrainable[T, S]) : HashMap[Int, S[T]] = {
     import ord.mkOrderingOps
     val varIds = getVarIds
