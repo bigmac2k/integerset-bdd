@@ -310,13 +310,13 @@ class IntLikeSet[I, T](val bits : Int, val set : IntSet[I])
 	def times(that: IntLikeSet[I,T]) : IntLikeSet[I,T] = {
 		def isSingleton(x: IntSet[I]): Boolean = x.remove(x.randomElement()).isEmpty
 
-		if (isSingleton(that.set)) {
+		/*if (isSingleton(that.set)) {
 			this.mulSingleton(that.randomElement())
 		} else if (isSingleton(this.set)) {
 			that.mulSingleton(this.randomElement())
-		} else {
+		} else {*/
 			this.mulPredicate(PrecisionPredicate(0.9))(true)(that)
-		}
+		//}
 	}
 
 	def mulPredicate(cutoffTest: (CBDD,Int,Int)=>Boolean)(findBounds: Boolean)(that : IntLikeSet[I, T]) = {

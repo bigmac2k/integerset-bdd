@@ -3,7 +3,7 @@ name := "bdd"
 version := "0.1"
 
 //scalaVersion := "2.11.7"
-scalaVersion := "2.12.1"
+scalaVersion := "2.12.2"
 
 resolvers ++= Seq(
   "Sonatype Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots",
