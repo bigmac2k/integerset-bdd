@@ -13,7 +13,33 @@ An example use of the library is available in the [Jakstab BDDStab Adapter](http
 
 ## Example
 
+To use the library, create an empty directory. Create the following files:
+
+-----------------------------------------------------------------------
+
+project/assembly.sbt:
+```scala
+addSbtPlugin(“com.eed3si9n” % "sbt-assembly" % "0.14.4")
 ```
+
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+
+build.sbt:
+```scala
+name := “bddusage”
+scalaVersion := “2.12.2”
+lazy val root = Project(“root”, file(“.”)).dependsOn(bddproject)
+lazy val bddproject = RootProject(uri(“https://github.com/bigmac2k/integerset-bdd.git”))
+```
+
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+
+src/main/scala/usage.scala:
+```scala
 import cc.sven.tlike._
 import cc.sven.constraint._
 import scala.collection.immutable.HashMap
@@ -57,4 +83,30 @@ println(s"intersection:\n${evensPos intersect oddsPos}\n")
 println(s"union:\n${evensPos union oddsPos}\n")
 println(s"evens + odds == odds:\n${odds_ == odds}\n")
 }
+```
+
+-----------------------------------------------------------------------
+
+Then execute the following command using the scala build tool:
+
+```bash
+$ sbt assembly
+$ time java -jar target/scala-2.12/bddusage-assembly-0.1-SNAPSHOT.jar
+```
+
+The output may be as follows:
+```
+... all positive evens: Set\[4611686018427387904\](0, MANYVAL,
+9223372036854775806)
+
+all positive odds: Set\[4611686018427387904\](1, MANYVAL,
+9223372036854775807)
+
+intersection: Set\[0\]()
+
+union: Set\[9223372036854775808\](0, MANYVAL, 9223372036854775807)
+
+evens + odds == odds: true
+
+java -jar 1,01s user 0,04s system 165
 ```
