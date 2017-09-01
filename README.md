@@ -87,7 +87,7 @@ println(s"evens + odds == odds:\n${odds_ == odds}\n")
 
 -----------------------------------------------------------------------
 
-Then execute the following command using the scala build tool:
+Then execute the following commands in your shell:
 
 ```bash
 $ sbt assembly
@@ -96,15 +96,13 @@ $ time java -jar target/scala-2.12/bddusage-assembly-0.1-SNAPSHOT.jar
 
 The output may be as follows:
 ```
-... all positive evens: Set\[4611686018427387904\](0, MANYVAL,
-9223372036854775806)
+all positive evens: Set[4611686018427387904](0, MANYVAL, 9223372036854775806)
 
-all positive odds: Set\[4611686018427387904\](1, MANYVAL,
-9223372036854775807)
+all positive odds: Set[4611686018427387904](1, MANYVAL, 9223372036854775807)
 
-intersection: Set\[0\]()
+intersection: Set[0]()
 
-union: Set\[9223372036854775808\](0, MANYVAL, 9223372036854775807)
+union: Set[9223372036854775808](0, MANYVAL, 9223372036854775807)
 
 evens + odds == odds: true
 
