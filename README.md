@@ -19,7 +19,7 @@ To use the library, create an empty directory. Create the following files:
 
 project/assembly.sbt:
 ```scala
-addSbtPlugin(“com.eed3si9n” % "sbt-assembly" % "0.14.4")
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.4")
 ```
 
 -----------------------------------------------------------------------
@@ -28,10 +28,10 @@ addSbtPlugin(“com.eed3si9n” % "sbt-assembly" % "0.14.4")
 
 build.sbt:
 ```scala
-name := “bddusage”
-scalaVersion := “2.12.2”
-lazy val root = Project(“root”, file(“.”)).dependsOn(bddproject)
-lazy val bddproject = RootProject(uri(“https://github.com/bigmac2k/integerset-bdd.git”))
+name := "bddusage"
+scalaVersion := "2.12.2"
+lazy val root = Project("root", file(".")).dependsOn(bddproject)
+lazy val bddproject = RootProject(uri("https://github.com/bigmac2k/integerset-bdd.git"))
 ```
 
 -----------------------------------------------------------------------
