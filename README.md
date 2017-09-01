@@ -19,7 +19,7 @@ To use the library, create an empty directory. Create the following files:
 
 project/assembly.sbt:
 ```scala
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.4")
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.5")
 ```
 
 -----------------------------------------------------------------------
